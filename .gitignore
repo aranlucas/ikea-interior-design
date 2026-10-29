@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.schema
+.data/
+.output/
+.vercel/
+.tanstack/
+dist/
+
+.varlock/
