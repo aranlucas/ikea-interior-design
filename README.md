@@ -18,7 +18,7 @@ Deploy the repository, mount a persistent volume at `/data`, set `DATA_DIR=/data
 
 ## Authentication
 
-The existing shared Better Auth service provides OIDC at `https://auth.aranlucas.workers.dev/api/auth`. Register a web client with the exact `${APP_URL}/api/auth/callback`, authorization-code grant, `openid profile email`, PKCE, and `client_secret_basic`. Set the returned client ID and store its secret in Bitwarden. This app verifies authorization state, nonce, PKCE and ID tokens using `openid-client`, then issues a seven-day encrypted HttpOnly app session. Storage and generation routes require that session; browser mutations require the configured app origin.
+The existing shared Better Auth service provides OIDC at `https://auth.aranlucas.workers.dev/api/auth`. The production web client is `roomform_dd49377094d4bb7659702cb9`, registered with the exact `https://roomform-production.up.railway.app/api/auth/callback`, authorization-code grant, `openid profile email`, PKCE, and `client_secret_basic`. Its secret is held in Bitwarden and referenced by `.env.schema`. Provisioning used `cf d1 query --batch` against the shared Auth database, following its existing deployment-owned client schema and SHA-256 secret hashing. This app verifies authorization state, nonce, PKCE and ID tokens using `openid-client`, then issues a seven-day encrypted HttpOnly app session. Storage and generation routes require that session; browser mutations require the configured app origin.
 
 ## Image generation
 
