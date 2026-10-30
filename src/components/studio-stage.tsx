@@ -2,6 +2,8 @@ import { Download, ImagePlus, LoaderCircle, MoveHorizontal } from "lucide-react"
 import { assetUrl } from "../lib/types";
 import { Filmstrips } from "./filmstrips";
 import type { StudioState } from "../hooks/use-studio";
+import { lazy, Suspense } from "react";
+const RoomPreview = lazy(() => import("./room-preview"));
 export function StudioStage({ state }: { state: StudioState }) {
   const {
     generating,
@@ -24,18 +26,26 @@ export function StudioStage({ state }: { state: StudioState }) {
   return (
     <section className="stage">
       <div className="stage-bar">
-        {design ? (
+        {photos.length > 0 ? (
           <div className="segmented" role="group" aria-label="View">
-            {(["photo", "design", "compare"] as const).map((v) => (
-              <button
-                key={v}
-                aria-pressed={shown === v}
-                disabled={v === "compare" && !before}
-                onClick={() => setView(v)}
-              >
-                {v === "photo" ? "Photo" : v === "design" ? "Design" : "Compare"}
-              </button>
-            ))}
+            {(["photo", "room", ...(design ? (["design", "compare"] as const) : [])] as const).map(
+              (v) => (
+                <button
+                  key={v}
+                  aria-pressed={shown === v}
+                  disabled={v === "compare" && !before}
+                  onClick={() => setView(v)}
+                >
+                  {v === "photo"
+                    ? "Photo"
+                    : v === "room"
+                      ? "3D room"
+                      : v === "design"
+                        ? "Design"
+                        : "Compare"}
+                </button>
+              ),
+            )}
           </div>
         ) : (
           <span className="muted small">
@@ -57,7 +67,7 @@ export function StudioStage({ state }: { state: StudioState }) {
         )}
       </div>
       <div
-        className={`canvas${dragging ? " dragging" : ""}`}
+        className={`canvas${shown === "room" && photos.length ? " room-canvas" : ""}${dragging ? " dragging" : ""}`}
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);
@@ -65,7 +75,21 @@ export function StudioStage({ state }: { state: StudioState }) {
         onDragLeave={() => setDragging(false)}
         onDrop={drop}
       >
-        {shown === "compare" && design && before ? (
+        {photos.length > 0 && (
+          <div hidden={shown !== "room"} style={{ width: "100%" }}>
+            <Suspense
+              fallback={
+                <div className="dropzone" role="status">
+                  <LoaderCircle className="spin" size={22} />
+                  Loading 3D room…
+                </div>
+              }
+            >
+              <RoomPreview key={room.id} state={state} />
+            </Suspense>
+          </div>
+        )}
+        {shown === "room" && photos.length ? null : shown === "compare" && design && before ? (
           <>
             <img src={assetUrl(before.key)} alt="Original photo" />
             <div className="after" style={{ clipPath: `inset(0 0 0 ${split}%)` }}>
@@ -99,7 +123,9 @@ export function StudioStage({ state }: { state: StudioState }) {
             <button className="button" disabled={locked} onClick={() => input.current?.click()}>
               Choose photos
             </button>
-            <small className="muted">JPG, PNG or WebP</small>
+            <small className="muted">
+              JPG, PNG or WebP · Preview your room in 3D before generating
+            </small>
           </div>
         )}
         {generating && (
@@ -108,6 +134,9 @@ export function StudioStage({ state }: { state: StudioState }) {
             <p>Generating…</p>
             <small>This can take a few minutes.</small>
           </div>
+        )}
+        {shown === "design" && active?.inferred && (
+          <span className="tag right">AI finish · Includes inferred areas</span>
         )}
       </div>
       <Filmstrips state={state} />

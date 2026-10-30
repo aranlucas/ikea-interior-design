@@ -68,11 +68,11 @@ export function DesignPanel({ state }: { state: StudioState }) {
           ) : refine ? (
             "Refine"
           ) : (
-            "Generate"
+            "Generate image"
           )}
         </button>
         {!session.generationConfigured ? (
-          <p className="hint">Image generation isn’t configured on this server.</p>
+          <p className="hint">Image generation isn’t configured. The 3D room works without AI.</p>
         ) : (
           !base && <p className="hint">Add a room photo to generate.</p>
         )}

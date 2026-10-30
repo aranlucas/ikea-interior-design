@@ -5,7 +5,7 @@ export type Session = {
   authConfigured: boolean;
   generationConfigured: boolean;
 };
-export type View = "photo" | "design" | "compare";
+export type View = "photo" | "room" | "design" | "compare";
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, init);
   if (!r.ok) {

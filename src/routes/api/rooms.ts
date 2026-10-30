@@ -12,6 +12,8 @@ import { handle } from "../../lib/http.server";
 import { updateRoom, deleteDesign } from "../../lib/room-actions.server";
 import { roomInput, roomName, roomDelete, uuid } from "../../lib/validation";
 import type { Asset, Room } from "../../lib/types";
+import { roomModel } from "../../lib/room-model";
+import { cancelRoomReconstruction } from "../../lib/reconstruction.server";
 export const Route = createFileRoute("/api/rooms")({
   server: {
     handlers: {
@@ -100,6 +102,7 @@ export const Route = createFileRoute("/api/rooms")({
           const { roomId, assetId, designId } = roomDelete.parse(await request.json());
           if (designId) return Response.json(await deleteDesign(u.sub, roomId, designId));
           if (assetId === undefined) {
+            cancelRoomReconstruction(u.sub, roomId);
             if (!(await deleteRoom(u.sub, roomId)))
               throw new Response("Room not found", { status: 404 });
             return Response.json({ deletedRoomId: roomId });
@@ -111,6 +114,7 @@ export const Route = createFileRoute("/api/rooms")({
             if (!room) throw new Response("Room not found", { status: 404 });
             key = room.assets.find((a) => a.id === assetId)?.key;
             room.assets = room.assets.filter((a) => a.id !== assetId);
+            if (room.model) room.model = roomModel(room.model, room.assets);
             return room;
           });
           if (key) await remove(key);
