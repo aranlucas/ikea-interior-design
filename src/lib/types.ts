@@ -29,6 +29,7 @@ export type Room = {
   designs: Design[];
   createdAt: string;
 };
+export type RoomSummary = Pick<Room, "id" | "name" | "type" | "createdAt">;
 export type User = { sub: string; name: string; email?: string };
 export const assetUrl = (key: string) => `/api/media?key=${encodeURIComponent(key)}`;
 

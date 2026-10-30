@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import { createStudioData } from "./studio-data";
+import { studioKeys } from "./studio-queries";
 import type { Room } from "./types";
 const room: Room = {
   id: "room",
@@ -12,26 +13,24 @@ const room: Room = {
   designs: [],
   createdAt: "",
 };
+vi.mock("./studio-bootstrap", async () => {
+  const { api } = await import("./studio-client");
+  return {
+    getStudioRooms: () => api("/api/rooms"),
+    getStudioRoom: async () => (await api<Room[]>("/api/rooms"))[0],
+  };
+});
 afterEach(() => vi.unstubAllGlobals());
 describe("rooms collection", () => {
-  it("does not request rooms on the server", async () => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
-    const client = new QueryClient();
-    const { rooms } = createStudioData(client);
-    const unsubscribe = rooms.subscribeChanges(() => {});
-    await Promise.resolve();
-    expect(fetch).not.toHaveBeenCalled();
-    unsubscribe.unsubscribe();
-    await rooms.cleanup();
-    client.clear();
-  });
   it("rolls back failed optimistic edits and accepts server rooms without refetch", async () => {
     const fetch = vi.fn(async () => Response.json([room]));
     vi.stubGlobal("window", {});
     vi.stubGlobal("fetch", fetch);
     const client = new QueryClient();
-    const { rooms, change, update } = createStudioData(client);
+    const data = createStudioData(client);
+    const { change, update } = data;
+    const rooms = data.getRoom(room.id);
+    await data.summaries.preload();
     await rooms.preload();
     let reject!: (error: Error) => void;
     const pending = change(
@@ -58,9 +57,29 @@ describe("rooms collection", () => {
         }),
     );
     expect(rooms.get(room.id)?.name).toBe("Server");
-    expect(client.getQueryData<Room[]>(["rooms"])?.[0].name).toBe("Server");
-    expect(fetch).toHaveBeenCalledTimes(1);
-    await rooms.cleanup();
+    expect(client.getQueryData<Room[]>(studioKeys.room(room.id))?.[0].name).toBe("Server");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await data.db.cleanup();
     client.clear();
   });
+});
+
+it("exposes initial and background fetch failures through collection health, keeping loaded rooms", async () => {
+  vi.stubGlobal("window", {});
+  const fetch = vi.fn().mockResolvedValue(Response.json({ error: "Denied" }, { status: 403 }));
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient();
+  const data = createStudioData(client);
+  const rooms = data.getRoom(room.id);
+  await expect(rooms.preload()).rejects.toThrow("Denied");
+  expect(rooms.health.error?.message).toBe("Denied");
+  fetch.mockImplementation(async () => Response.json([room]));
+  await rooms.reload();
+  expect(rooms.health.hasErrors).toBe(false);
+  fetch.mockImplementation(async () => Response.json({ error: "Offline" }, { status: 503 }));
+  await expect(rooms.utils.refetch({ throwOnError: true })).rejects.toThrow("Offline");
+  expect(rooms.get(room.id)?.name).toBe("Before");
+  expect(rooms.health.failureReason?.message).toBe("Offline");
+  await data.db.cleanup();
+  client.clear();
 });

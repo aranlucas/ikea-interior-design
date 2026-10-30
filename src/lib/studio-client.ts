@@ -6,6 +6,12 @@ export type Session = {
   authConfigured: boolean;
   generationConfigured: boolean;
 };
+export const studioUrls = {
+  session: "/api/session",
+  rooms: "/api/rooms",
+  generation: "/api/generate",
+  importReference: "/api/import",
+} as const;
 export type View = "photo" | "design" | "compare";
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, init);

@@ -1,112 +1,91 @@
-import { observeJob } from "../lib/watched-job";
-import { useLiveQuery } from "@tanstack/react-db";
+import { applyWatchedJob } from "../lib/watched-job";
+import { generationOptions, sessionOptions } from "../lib/studio-queries";
+import { findProblems, useLiveQuery } from "@tanstack/react-db";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useStudioData } from "../lib/studio-data";
-import { useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useStudioData, studioRoomsQuery, studioRoomQuery } from "../lib/studio-data";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useStudioError } from "../lib/studio-feedback";
 import { useRoomDrafts } from "./use-room-drafts";
-import type { Room, Asset, GenerationJob } from "../lib/types";
+import type { Room, Asset } from "../lib/types";
 import {
   api,
+  studioUrls,
   json,
   compress,
-  type Session,
   type View,
   type Mode,
   type People,
   type Lighting,
 } from "../lib/studio-client";
-export function useStudio() {
-  const { rooms, update, change } = useStudioData();
+export function useStudio(roomId: string) {
+  const { getRoom, update, change, runRoom, summaries, watching } = useStudioData();
   const queryClient = useQueryClient();
-  const sessionQuery = useQuery({
-    queryKey: ["session"],
-    queryFn: () => api<Session>("/api/session"),
-    enabled: typeof window !== "undefined",
-    staleTime: Infinity,
-  });
+  const sessionQuery = useQuery(sessionOptions());
   const session = sessionQuery.data;
-  const { data: all = [] } = useLiveQuery({
-    query: (q) =>
-      session?.user && typeof window !== "undefined"
-        ? q.from({ room: rooms }).orderBy(({ room }) => room.createdAt, "desc")
-        : undefined,
+  const { data: all = [], health } = useLiveQuery({
+    ...studioRoomsQuery,
+    query: session?.user ? studioRoomsQuery.query : () => undefined,
   });
-  const roomsQuery = useQuery<Room[]>({
-    queryKey: ["rooms"],
-    queryFn: () => api<Room[]>("/api/rooms"),
-    enabled: false,
+  const navigate = useNavigate();
+  const setRoomId = (id: string) =>
+    id ? navigate({ to: "/rooms/$roomId", params: { roomId: id } }) : navigate({ to: "/rooms" });
+  const rooms = getRoom(roomId);
+  const { data: room, health: roomHealth } = useLiveQuery({
+    ...studioRoomQuery(roomId),
+    query: roomId ? studioRoomQuery(roomId).query : () => undefined,
   });
-  const [chosenRoomId, chooseRoom] = useState<string>();
-  const roomId = chosenRoomId ?? all[0]?.id ?? "";
-  const setRoomId = (id: string) => chooseRoom(id);
   const [modal, setModal] = useState<"room" | "reference" | "rename" | null>(null);
   const [sizeAsset, setSizeAsset] = useState<Asset | null>(null);
-  const [error, setError] = useState("");
+  const setError = useStudioError();
   const [busy, setBusy] = useState(false);
   const [starting, setStarting] = useState(false);
 
-  // Only the job this tab watched running may update the view or report an error.
-  const watching = useRef<string | undefined>(undefined);
-
-  const [baseId, setBaseId] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
+  const [baseId, setBaseId] = useState(() => room?.assets.find((a) => a.kind === "room")?.id || "");
+  const [selected, setSelected] = useState<string[]>(
+    () => room?.assets.filter((a) => a.kind !== "room").map((a) => a.id) || [],
+  );
   const [designId, setDesignId] = useState("");
   const [view, setView] = useState<View>("design");
   const [split, setSplit] = useState(50);
   const [refine, setRefine] = useState(false);
   const [mode, setMode] = useState<Mode>("redesign");
-  const [measurements, setMeasurements] = useState("");
+  const [measurements, setMeasurements] = useState(() => room?.measurements || "");
   const [count, setCount] = useState<1 | 2 | 4>(1);
   const [people, setPeople] = useState<People>("none");
   const [lighting, setLighting] = useState<Lighting>("natural");
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const room = all.find((r) => r.id === roomId);
-  const { notes, style, setNotes, setStyle, saveStatus } = useRoomDrafts(room, setError);
+  const { draftFields, getDraft, saveStatus } = useRoomDrafts(room, setError);
   const jobQuery = useQuery({
-    queryKey: ["generation"],
-    enabled: !!session?.user && typeof window !== "undefined",
-    queryFn: async ({ signal }) => {
-      const result = await api<{ job: GenerationJob | null; room?: Room }>("/api/generate", {
-        signal,
-      });
-      const outcome = observeJob(watching.current, result.job);
-      watching.current = outcome.watching;
-      if (outcome.act && result.job) {
-        if (result.room) {
-          await update(result.room);
-          if (result.room.id === currentRoom.current) {
-            setDesignId(result.job.designId || "");
-            setView("design");
-          }
-        }
-        if (result.job.status === "failed") setError(result.job.error || "Generation failed.");
-      }
-      return result;
-    },
-    refetchInterval: (query) => (query.state.data?.job?.status === "running" ? 3000 : false),
-    refetchIntervalInBackground: true,
-    staleTime: Infinity,
+    ...generationOptions(),
+    enabled: !!session?.user && generationOptions().enabled,
   });
   const job = jobQuery.data?.job ?? null;
   const currentRoom = useRef(roomId);
   currentRoom.current = roomId;
+  useEffect(() => {
+    // Synchronize a committed query result with local DB/UI state. No API calls here.
+    if (!jobQuery.data) return;
+    const result = jobQuery.data;
+    void applyWatchedJob(watching, result, {
+      update,
+      currentRoom: () => currentRoom.current,
+      showDesign: (id) => {
+        setDesignId(id);
+        setView("design");
+      },
+      onError: setError,
+    }).catch((error: unknown) => {
+      setError(error instanceof Error ? error.message : "Could not update room.");
+    });
+  }, [jobQuery.data, update]);
   const generating = starting || (job?.status === "running" && job.roomId === roomId);
-  const [selectionRoom, setSelectionRoom] = useState(roomId);
-  if (selectionRoom !== roomId) {
-    setSelectionRoom(roomId);
-    setBaseId(room?.assets.find((a) => a.kind === "room")?.id || "");
-    setSelected(room?.assets.filter((a) => a.kind !== "room").map((a) => a.id) || []);
-    setMeasurements(room?.measurements || "");
-    setMode("redesign");
-    setPeople("none");
-    setLighting("natural");
-    setDesignId("");
-    setView("design");
-    setRefine(false);
-  }
-  const queryError = sessionQuery.error || roomsQuery.error || jobQuery.error;
-  const [seenError, setSeenError] = useState<Error | null>(null);
+  const problemHealth = roomHealth?.hasErrors ? roomHealth : health;
+  const roomProblem = problemHealth && findProblems(problemHealth)[0];
+  const roomError = roomProblem && (roomProblem.error || roomProblem.failureReason);
+  const queryError = sessionQuery.error || roomError || jobQuery.error;
+  const [seenError, setSeenError] = useState<typeof queryError>(null);
   if (queryError && queryError !== seenError) {
     setSeenError(queryError);
     setError(queryError.message);
@@ -128,15 +107,7 @@ export function useStudio() {
     setError("");
     setBusy(true);
     try {
-      // Capture an immutable scope: changing rooms must not move an in-flight request.
-      await queryClient
-        .getMutationCache()
-        .build(queryClient, {
-          mutationKey: ["room", roomId],
-          scope: { id: `room:${roomId}` },
-          mutationFn: task,
-        })
-        .execute(undefined);
+      await runRoom(roomId, task);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -145,9 +116,9 @@ export function useStudio() {
   }
   async function create(type: string) {
     await run(async () => {
-      const r = await api<Room>("/api/rooms", json({ type }));
+      const r = await api<Room>(studioUrls.rooms, json({ type }));
       await update(r);
-      setRoomId(r.id);
+      await setRoomId(r.id);
       setModal(null);
     });
   }
@@ -171,7 +142,7 @@ export function useStudio() {
         data.set("name", name || file.name.replace(/\.[^.]+$/, ""));
         if (url) data.set("url", url);
         if (dimensions) data.set("dimensions", dimensions);
-        const r = await api<Room>("/api/rooms", { method: "PATCH", body: data });
+        const r = await api<Room>(studioUrls.rooms, { method: "PATCH", body: data });
         await update(r);
         if (kind !== "room") setSelected((p) => [...p, r.assets[r.assets.length - 1].id]);
         else setBaseId((p) => p || r.assets.find((a) => a.kind === "room")?.id || "");
@@ -195,7 +166,7 @@ export function useStudio() {
     }
     await run(async () => {
       const r = await api<Room>(
-        "/api/import",
+        studioUrls.importReference,
         json({
           roomId: room?.id,
           url: data.get("url"),
@@ -214,7 +185,7 @@ export function useStudio() {
     if (!room || !sizeAsset) return;
     const data = new FormData(e.currentTarget);
     await run(async () => {
-      const r = await api<Room>("/api/rooms", {
+      const r = await api<Room>(studioUrls.rooms, {
         ...json({ roomId: room.id, assetId: sizeAsset.id, dimensions: data.get("dimensions") }),
         method: "PUT",
       });
@@ -230,13 +201,20 @@ export function useStudio() {
       await change(
         async () => {
           await update(
-            await api<Room>("/api/rooms", { ...json({ roomId: room.id, name }), method: "PUT" }),
+            await api<Room>(studioUrls.rooms, {
+              ...json({ roomId: room.id, name }),
+              method: "PUT",
+            }),
           );
         },
-        () =>
+        () => {
           rooms.update(room.id, (draft) => {
             draft.name = name;
-          }),
+          });
+          summaries.update(room.id, (draft) => {
+            draft.name = name;
+          });
+        },
       );
       setModal(null);
     });
@@ -247,7 +225,7 @@ export function useStudio() {
       await change(
         async () => {
           await update(
-            await api<Room>("/api/rooms", {
+            await api<Room>(studioUrls.rooms, {
               ...json({ roomId: room.id, designId: id }),
               method: "DELETE",
             }),
@@ -276,15 +254,19 @@ export function useStudio() {
     await run(async () => {
       await change(
         async () => {
-          await api<{ deletedRoomId: string }>("/api/rooms", {
+          await api<{ deletedRoomId: string }>(studioUrls.rooms, {
             ...json({ roomId: id }),
             method: "DELETE",
           });
           await rooms.utils.writeDelete(id);
+          await summaries.utils.writeDelete(id);
         },
-        () => rooms.delete(id),
+        () => {
+          rooms.delete(id);
+          summaries.delete(id);
+        },
       );
-      setRoomId(all.find((r) => r.id !== id)?.id || "");
+      await setRoomId(all.find((r) => r.id !== id)?.id || "");
       setModal(null);
     });
   }
@@ -294,7 +276,7 @@ export function useStudio() {
       let r: Room = room;
       await change(
         async () => {
-          r = await api<Room>("/api/rooms", {
+          r = await api<Room>(studioUrls.rooms, {
             ...json({ roomId: room.id, assetId: asset.id }),
             method: "DELETE",
           });
@@ -316,19 +298,19 @@ export function useStudio() {
     });
   }
   const generationMutation = useMutation({
-    mutationFn: (body: unknown) => api<{ jobId: string }>("/api/generate", json(body)),
+    mutationFn: (body: unknown) => api<{ jobId: string }>(studioUrls.generation, json(body)),
   });
   async function generate() {
     if (!room || !base) return;
     setStarting(true);
     setError("");
     try {
-      await queryClient.cancelQueries({ queryKey: ["generation"] });
+      await queryClient.cancelQueries({ queryKey: generationOptions().queryKey });
       const r = await generationMutation.mutateAsync({
         roomId: room.id,
         baseId: base.id,
-        notes,
-        style,
+        notes: getDraft().notes,
+        style: getDraft().style,
         assetIds: selected,
         previousDesignId: refine ? active?.id : undefined,
         mode,
@@ -338,7 +320,7 @@ export function useStudio() {
         lighting,
       });
       watching.current = r.jobId;
-      queryClient.setQueryData(["generation"], {
+      queryClient.setQueryData(generationOptions().queryKey, {
         job: {
           id: r.jobId,
           owner: "",
@@ -350,7 +332,7 @@ export function useStudio() {
           updatedAt: "",
         },
       });
-      await queryClient.invalidateQueries({ queryKey: ["generation"] });
+      await queryClient.invalidateQueries({ queryKey: generationOptions().queryKey });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed.");
     } finally {
@@ -364,7 +346,7 @@ export function useStudio() {
       await change(
         async () => {
           await update(
-            await api<Room>("/api/rooms", {
+            await api<Room>(studioUrls.rooms, {
               ...json({ roomId: room.id, designId, starred }),
               method: "PUT",
             }),
@@ -393,7 +375,6 @@ export function useStudio() {
     setModal,
     sizeAsset,
     setSizeAsset,
-    error,
     setError,
     busy,
     setBusy,
@@ -405,10 +386,7 @@ export function useStudio() {
     setBaseId,
     selected,
     setSelected,
-    notes,
-    setNotes,
-    style,
-    setStyle,
+    draftFields,
     designId,
     setDesignId,
     view,

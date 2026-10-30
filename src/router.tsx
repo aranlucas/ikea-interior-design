@@ -1,22 +1,30 @@
 import { createRouter } from "@tanstack/react-router";
+import { DbProvider } from "@tanstack/react-db";
 import { QueryClient } from "@tanstack/react-query";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { createStudioData, StudioDataContext } from "./lib/studio-data";
 import { routeTree } from "./routeTree.gen";
 export function getRouter() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false },
-    },
-  });
+  const queryClient = new QueryClient();
   const data = createStudioData(queryClient);
   const router = createRouter({
     routeTree,
+    context: { queryClient, studioData: data },
     scrollRestoration: true,
     Wrap: ({ children }) => (
-      <StudioDataContext.Provider value={data}>{children}</StudioDataContext.Provider>
+      <DbProvider client={data.db}>
+        <StudioDataContext.Provider value={data}>{children}</StudioDataContext.Provider>
+      </DbProvider>
     ),
   });
+  router.serverSsrLifecycle = {
+    onServerSsrAttach: [
+      (serverSsr) =>
+        serverSsr.onCleanup(() => {
+          void data.db.cleanup();
+        }),
+    ],
+  };
   setupRouterSsrQueryIntegration({ router, queryClient });
   return router;
 }
