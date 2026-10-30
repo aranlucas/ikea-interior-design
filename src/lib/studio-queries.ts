@@ -13,6 +13,7 @@ export const studioKeys = {
 };
 
 // Studio reads are client-only and refreshed explicitly (generation also polls).
+// The session is the gate: it never loads during SSR, and rooms/generation wait for its user.
 // Keep this policy local so future queries retain Query's normal defaults.
 const studioReadOptions = {
   staleTime: Infinity,

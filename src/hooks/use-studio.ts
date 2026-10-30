@@ -15,7 +15,7 @@ export function useStudio() {
   const session = sessionQuery.data;
   const { data: all = [], health } = useLiveQuery({
     query: (q) =>
-      session?.user && typeof window !== "undefined"
+      session?.user
         ? q.from({ room: rooms }).orderBy(({ room }) => room.createdAt, "desc")
         : undefined,
   });
@@ -48,7 +48,7 @@ export function useStudio() {
   const { notes, style, setNotes, setStyle, saveStatus } = useRoomDrafts(room, setError);
   const jobQuery = useQuery({
     ...generationOptions(),
-    enabled: !!session?.user && typeof window !== "undefined",
+    enabled: !!session?.user,
   });
   const job = jobQuery.data?.job ?? null;
   const currentRoom = useRef(roomId);
