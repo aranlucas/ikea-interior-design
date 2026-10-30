@@ -13,6 +13,7 @@ import {
 } from "../../lib/storage.server";
 import { designInput, buildPrompt } from "../../lib/validation";
 import { handle } from "../../lib/http.server";
+import { outputSize } from "../../lib/image-size";
 export const Route = createFileRoute("/api/generate")({
   server: {
     handlers: {
@@ -68,7 +69,7 @@ export const Route = createFileRoute("/api/generate")({
             const result = await generateImage({
               model: provider.image(process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-sunburst"),
               prompt: { text: prompt, images },
-              size: "1536x1024",
+              size: outputSize(images[0]),
               n: 1,
               maxRetries: 0,
               abortSignal: AbortSignal.timeout(240_000),
