@@ -10,7 +10,9 @@ Varlock resolves `OPENAI_API_KEY`, `SESSION_SECRET`, and the OIDC client secret 
 
 ## Development
 
-Node 24+. Install with `npm ci`. Provide the Bitwarden bootstrap token to your shell, then run `npm run dev`. For a local studio without login, supply `DEV_AUTH_BYPASS=true` and `APP_URL=http://localhost:3000`; this is disabled in production. Local SQLite data lives in `.data/`. `npm run check`, `npm test`, and `npm run build` validate the app.
+Node 24+. Install with `npm ci`, then run `npm run dev:local` for a local studio without Bitwarden or login. SQLite data defaults to `.data/`; generation is disabled unless you supply `OPENAI_API_KEY` in your shell. Override `DATA_DIR` or `APP_URL` as needed. When using `tailscale serve`, set `APP_URL` to the exact browser origin (for example, `https://host.tailnet.ts.net:8443`); its hostname is allowed by Vite and mutations require that origin.
+
+For the regular secrets-backed setup, supply `BITWARDEN_ACCESS_TOKEN` and run `npm run dev`. Local mode applies only to the dev server; production authentication is unchanged. Validate with `npm run check`, `npm test`, `npm run lint`, and `npm run fmt:check`. Use `npm run fmt` to format and `npm run build` to build.
 
 ## Railway
 
