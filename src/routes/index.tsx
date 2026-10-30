@@ -61,6 +61,8 @@ function Studio() {
   const [busy, setBusy] = useState(false);
   const [starting, setStarting] = useState(false);
   const [job, setJob] = useState<GenerationJob | null>(null);
+  // Only the job this tab watched running may update the view or report an error.
+  const watching = useRef<string | undefined>(undefined);
   const generating = starting || (job?.status === "running" && job.roomId === roomId);
   const [baseId, setBaseId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -118,7 +120,10 @@ function Studio() {
         const result = await api<{ job: GenerationJob | null; room?: Room }>("/api/generate");
         if (cancelled) return;
         setJob(result.job);
-        if (result.job && result.job.status !== "running") {
+        if (result.job?.status === "running") watching.current = result.job.id;
+        else {
+          if (!result.job || watching.current !== result.job.id) return;
+          watching.current = undefined;
           if (result.room) {
             update(result.room);
             if (result.room.id === roomId) {
@@ -287,6 +292,7 @@ function Studio() {
           previousDesignId: refine ? active?.id : undefined,
         }),
       );
+      watching.current = r.jobId;
       setJob({
         id: r.jobId,
         owner: "",
