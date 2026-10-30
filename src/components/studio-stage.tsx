@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Download, ImagePlus, LoaderCircle, MoveHorizontal, Star } from "lucide-react";
 import { assetUrl } from "../lib/types";
+import { stepPhoto } from "../lib/photo-nav";
 import { Filmstrips } from "./filmstrips";
 import type { StudioState } from "../hooks/use-studio";
 export function StudioStage({ state }: { state: StudioState }) {
@@ -21,8 +23,36 @@ export function StudioStage({ state }: { state: StudioState }) {
     count,
     toggleStarred,
     drop,
+    modal,
+    sizeAsset,
+    setBaseId,
+    setDesignId,
   } = state;
   const room = state.room!;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (modal || sizeAsset || locked) return;
+      const el = e.target;
+      if (
+        el instanceof HTMLElement &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.tagName === "SELECT" ||
+          el.isContentEditable)
+      )
+        return;
+      const next = stepPhoto(photos, base?.id || "", e.key === "ArrowRight" ? 1 : -1);
+      if (!next) return;
+      e.preventDefault();
+      setBaseId(next.id);
+      setDesignId("");
+      setView("photo");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [photos, base, modal, sizeAsset, locked, setBaseId, setDesignId, setView]);
   return (
     <section className="stage">
       <div className="stage-bar">
