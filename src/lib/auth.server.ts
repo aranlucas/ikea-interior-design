@@ -15,5 +15,22 @@ export async function requireUser(req: Request) { const u = await user(req); if 
 export function sameOrigin(req: Request) { if (req.headers.get('origin') !== appUrl()) throw new Response('Origin not allowed.', { status: 403 }) }
 let discovery: Promise<oidc.Configuration> | undefined
 function config() { if (!process.env.AUTH_CLIENT_ID) throw new Error('Register this app with your Auth service and set AUTH_CLIENT_ID.'); return discovery ??= oidc.discovery(new URL(`${issuer()}/.well-known/openid-configuration`), process.env.AUTH_CLIENT_ID, process.env.AUTH_CLIENT_SECRET || undefined, process.env.AUTH_CLIENT_SECRET ? oidc.ClientSecretBasic(process.env.AUTH_CLIENT_SECRET) : oidc.None()) }
-export async function login() { const c = await config(); const verifier = oidc.randomPKCECodeVerifier(); const state = oidc.randomState(); const nonce = randomBytes(24).toString('hex'); const url = oidc.buildAuthorizationUrl(c, { redirect_uri: `${appUrl()}/api/auth/callback`, scope: 'openid profile email', code_challenge: await oidc.calculatePKCECodeChallenge(verifier), code_challenge_method: 'S256', state, nonce }); return new Response(null, { status: 302, headers: { Location: url.href, 'Set-Cookie': setCookie('roomform_login', await seal({ verifier, state, nonce }, '10m'), 600) } }) }
+export async function login() { const c = await config(); const verifier = oidc.randomPKCECodeVerifier(); const state = oidc.randomState(); const nonce = randomBytes(24).toString('hex'); const url = oidc.buildAuthorizationUrl(c, { redirect_uri: `${appUrl()}/api/auth/callback`, scope: 'openid profile email', code_challenge: await oidc.calculatePKCECodeChallenge(verifier), code_challenge_method: 'S256', state, nonce }); return new Response(null, { status: 302, headers: { Location: await authorizationRedirect(url), 'Set-Cookie': setCookie('roomform_login', await seal({ verifier, state, nonce }, '10m'), 600) } }) }
 export async function callback(req: Request) { const p = await unseal(cookie(req, 'roomform_login')); if (!p || typeof p.verifier !== 'string' || typeof p.state !== 'string' || typeof p.nonce !== 'string') throw new Error('Login expired. Please sign in again.'); const url = new URL(req.url); const canonical = new URL(`${appUrl()}/api/auth/callback`); canonical.search = url.search; const tokens = await oidc.authorizationCodeGrant(await config(), canonical, { pkceCodeVerifier: p.verifier, expectedState: p.state, expectedNonce: p.nonce, idTokenExpected: true }); const claims = tokens.claims(); if (!claims?.sub) throw new Error('Auth did not return an identity.'); const headers = new Headers({ Location: '/' }); headers.append('Set-Cookie', setCookie('roomform_session', await seal({ sub: claims.sub, name: claims.name, email: claims.email }), 604800)); headers.append('Set-Cookie', setCookie('roomform_login', '', 0)); return new Response(null, { status: 302, headers }) }
+
+// Better Auth returns a signed login destination as JSON for a signed-out authorization request.
+// Resolve that handoff on the server so a normal browser navigation reaches the login UI.
+export async function authorizationRedirect(url: URL): Promise<string> {
+ const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(15_000) })
+ if (response.status === 200 && response.headers.get('content-type')?.includes('application/json')) {
+  const data: unknown = await response.json()
+  if (data && typeof data === 'object' && 'redirect' in data && data.redirect === true && 'url' in data && typeof data.url === 'string') {
+   const destination = new URL(data.url, url)
+   if (destination.origin !== url.origin || !destination.pathname.startsWith('/auth/')) throw new Error('Auth returned an unexpected login destination.')
+   return destination.href
+  }
+  throw new Error('Auth did not return a login destination.')
+ }
+ if (!response.ok && response.status !== 302 && response.status !== 303) throw new Error('Auth is temporarily unavailable. Please try again.')
+ return url.href
+}
