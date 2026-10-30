@@ -2,10 +2,21 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { ChevronDown, ImagePlus, X } from "lucide-react";
 import { accept, roomTypes } from "../lib/studio-client";
 
-export function Strip({ label, children }: { label: string; children: ReactNode }) {
+export function Strip({
+  label,
+  action,
+  children,
+}: {
+  label: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="strip">
-      <span className="strip-label">{label}</span>
+      <span className="strip-label">
+        {label}
+        {action}
+      </span>
       <div className="strip-items">{children}</div>
     </div>
   );

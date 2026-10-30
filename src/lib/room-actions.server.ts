@@ -5,7 +5,11 @@ export async function updateRoom(owner: string, value: unknown) {
   return mutateRooms(owner, (all) => {
     const room = all.find((r) => r.id === input.roomId);
     if (!room) throw new Response("Room not found", { status: 404 });
-    if ("assetId" in input) {
+    if ("designId" in input) {
+      const design = room.designs.find((d) => d.id === input.designId);
+      if (!design) throw new Response("Design not found", { status: 404 });
+      design.starred = input.starred;
+    } else if ("assetId" in input) {
       const asset = room.assets.find((a) => a.id === input.assetId && a.kind !== "room");
       if (!asset) throw new Response("Reference not found", { status: 404 });
       asset.dimensions = input.dimensions;

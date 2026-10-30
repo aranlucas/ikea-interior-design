@@ -5,7 +5,16 @@ import { useStudioData } from "../lib/studio-data";
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useRoomDrafts } from "./use-room-drafts";
 import type { Room, Asset, GenerationJob } from "../lib/types";
-import { api, json, compress, type Session, type View, type Mode } from "../lib/studio-client";
+import {
+  api,
+  json,
+  compress,
+  type Session,
+  type View,
+  type Mode,
+  type People,
+  type Lighting,
+} from "../lib/studio-client";
 export function useStudio() {
   const { rooms, update, change } = useStudioData();
   const queryClient = useQueryClient();
@@ -48,6 +57,8 @@ export function useStudio() {
   const [mode, setMode] = useState<Mode>("redesign");
   const [measurements, setMeasurements] = useState("");
   const [count, setCount] = useState<1 | 2 | 4>(1);
+  const [people, setPeople] = useState<People>("none");
+  const [lighting, setLighting] = useState<Lighting>("natural");
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const room = all.find((r) => r.id === roomId);
@@ -88,6 +99,8 @@ export function useStudio() {
     setSelected(room?.assets.filter((a) => a.kind !== "room").map((a) => a.id) || []);
     setMeasurements(room?.measurements || "");
     setMode("redesign");
+    setPeople("none");
+    setLighting("natural");
     setDesignId("");
     setView("design");
     setRefine(false);
@@ -321,6 +334,8 @@ export function useStudio() {
         mode,
         count,
         measurements,
+        people,
+        lighting,
       });
       watching.current = r.jobId;
       queryClient.setQueryData(["generation"], {
@@ -341,6 +356,27 @@ export function useStudio() {
     } finally {
       setStarting(false);
     }
+  }
+  async function toggleStarred(designId: string) {
+    if (!room) return;
+    const starred = !room.designs.find((d) => d.id === designId)?.starred;
+    await run(async () => {
+      await change(
+        async () => {
+          await update(
+            await api<Room>("/api/rooms", {
+              ...json({ roomId: room.id, designId, starred }),
+              method: "PUT",
+            }),
+          );
+        },
+        () =>
+          rooms.update(room.id, (draft) => {
+            const design = draft.designs.find((d) => d.id === designId);
+            if (design) design.starred = starred;
+          }),
+      );
+    });
   }
   function drop(e: DragEvent) {
     e.preventDefault();
@@ -387,6 +423,11 @@ export function useStudio() {
     setMeasurements,
     count,
     setCount,
+    people,
+    setPeople,
+    lighting,
+    setLighting,
+    toggleStarred,
     dragging,
     setDragging,
     input,

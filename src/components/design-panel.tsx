@@ -1,6 +1,13 @@
 import { ChevronDown, LoaderCircle } from "lucide-react";
 import { ReferencesList } from "./references-list";
-import { styles, modes } from "../lib/studio-client";
+import {
+  styles,
+  modes,
+  peopleChoices,
+  lightingChoices,
+  type People,
+  type Lighting,
+} from "../lib/studio-client";
 import type { StudioState } from "../hooks/use-studio";
 export function DesignPanel({ state }: { state: StudioState }) {
   const {
@@ -18,6 +25,10 @@ export function DesignPanel({ state }: { state: StudioState }) {
     setMeasurements,
     count,
     setCount,
+    people,
+    setPeople,
+    lighting,
+    setLighting,
     base,
     active,
     locked,
@@ -57,6 +68,36 @@ export function DesignPanel({ state }: { state: StudioState }) {
             <ChevronDown size={14} />
           </div>
         </label>
+        <div className="field-row">
+          <label className="field">
+            <span>
+              People <em>optional</em>
+            </span>
+            <div className="select">
+              <select value={people} onChange={(e) => setPeople(e.target.value as People)}>
+                {peopleChoices.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={14} />
+            </div>
+          </label>
+          <label className="field">
+            <span>Lighting</span>
+            <div className="select">
+              <select value={lighting} onChange={(e) => setLighting(e.target.value as Lighting)}>
+                {lightingChoices.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={14} />
+            </div>
+          </label>
+        </div>
         <label className="field">
           <span>
             Room size <em>optional — anchors product scale</em>

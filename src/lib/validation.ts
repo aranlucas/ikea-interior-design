@@ -9,7 +9,15 @@ export function roomName(type: string, taken: string[]) {
   for (let n = 2; taken.includes(name); n++) name = `${type} ${n}`;
   return name;
 }
-export const designModes = ["redesign", "stage", "empty"] as const;
+export const designModes = ["redesign", "stage", "empty", "sketch"] as const;
+export const peopleOptions = ["none", "man", "woman", "couple", "family", "dog"] as const;
+export const lightingOptions = [
+  "natural",
+  "daylight",
+  "golden hour",
+  "evening",
+  "cozy lamps",
+] as const;
 export const designInput = z.object({
   roomId: z.uuid(),
   baseId: z.uuid(),
@@ -20,6 +28,8 @@ export const designInput = z.object({
   mode: z.enum(designModes).default("redesign"),
   count: z.union([z.literal(1), z.literal(2), z.literal(4)]).default(1),
   measurements: z.string().trim().max(200).default(""),
+  people: z.enum(peopleOptions).default("none"),
+  lighting: z.enum(lightingOptions).default("natural"),
 });
 export const uuid = z.uuid();
 
@@ -30,6 +40,16 @@ const MODE_DIRECTIVES: Record<(typeof designModes)[number], string> = {
     "The room is empty or nearly empty: virtually stage it. Preserve its architecture, room dimensions, perspective, windows, doors, ceiling, permanent fixtures, and natural light, and do not invent space or move walls. Furnish and decorate the space so it feels lived-in and appealing, using the referenced products where provided.",
   empty:
     "Empty the space: remove all furniture, rugs, decor, wall art, and personal items. Keep the architecture, floor and wall finishes, windows, doors, ceiling, built-in and permanent fixtures, and natural light exactly as they are. Return a clean, unfurnished version of the same room from the same camera view.",
+  sketch:
+    "Image 1 is a sketch, drawing, or 3D-software screenshot rather than a photograph. Turn it into a photorealistic interior: honor the layout, proportions, openings, and fixed elements it depicts, then render believable materials, natural light, soft shadows, and furnishings in the chosen style.",
+};
+const PEOPLE_PHRASES: Record<(typeof peopleOptions)[number], string> = {
+  none: "",
+  man: "a man",
+  woman: "a woman",
+  couple: "a couple",
+  family: "a family",
+  dog: "a dog",
 };
 
 export function buildPrompt(
@@ -46,9 +66,18 @@ export function buildPrompt(
     )
     .join("\n");
   const scales = scaleNotes(references, input.measurements);
+  const scene = [
+    input.people !== "none"
+      ? `Naturally include ${PEOPLE_PHRASES[input.people]} in the scene at plausible scale, relaxed and candid.`
+      : "",
+    input.lighting !== "natural" ? `Lighting direction: ${input.lighting}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const parts = [
     `You are an expert interior designer producing a photorealistic visualization of ${roomName}.`,
     MODE_DIRECTIVES[input.mode],
+    scene,
     roomCount > 1
       ? `Additional room images (images 2 through ${roomCount}) show the same room from other angles and are architectural context only.`
       : "",
@@ -76,6 +105,7 @@ export const roomUpdate = z.union([
   z.object({ roomId: uuid, assetId: uuid, dimensions: z.string().trim().max(200) }),
   z.object({ roomId: uuid, notes: z.string().max(4000), style: z.string().max(100) }),
   z.object({ roomId: uuid, name: z.string().trim().min(1).max(100) }),
+  z.object({ roomId: uuid, designId: uuid, starred: z.boolean() }),
 ]);
 export const roomDelete = z
   .object({

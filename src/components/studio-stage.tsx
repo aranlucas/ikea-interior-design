@@ -1,4 +1,4 @@
-import { Download, ImagePlus, LoaderCircle, MoveHorizontal } from "lucide-react";
+import { Download, ImagePlus, LoaderCircle, MoveHorizontal, Star } from "lucide-react";
 import { assetUrl } from "../lib/types";
 import { Filmstrips } from "./filmstrips";
 import type { StudioState } from "../hooks/use-studio";
@@ -19,6 +19,7 @@ export function StudioStage({ state }: { state: StudioState }) {
     before,
     locked,
     count,
+    toggleStarred,
     drop,
   } = state;
   const room = state.room!;
@@ -46,15 +47,27 @@ export function StudioStage({ state }: { state: StudioState }) {
           </span>
         )}
         {active && (
-          <a
-            className="icon-button"
-            href={assetUrl(active.key)}
-            download={`${room.name}-roomform.png`}
-            aria-label="Download design"
-            title="Download"
-          >
-            <Download size={16} />
-          </a>
+          <span className="stage-actions">
+            <button
+              className="icon-button"
+              aria-pressed={!!active.starred}
+              aria-label={active.starred ? `Unsave ${active.mode || "this"} design` : "Save design"}
+              title={active.starred ? "Unsave design" : "Save design"}
+              disabled={locked}
+              onClick={() => void toggleStarred(active.id)}
+            >
+              <Star size={16} className={active.starred ? "star-on" : undefined} />
+            </button>
+            <a
+              className="icon-button"
+              href={assetUrl(active.key)}
+              download={`${room.name}-roomform.png`}
+              aria-label="Download design"
+              title="Download"
+            >
+              <Download size={16} />
+            </a>
+          </span>
         )}
       </div>
       <div
