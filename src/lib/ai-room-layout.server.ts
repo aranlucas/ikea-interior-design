@@ -34,7 +34,7 @@ export async function runAiRoomLayout({
       },
     );
   }
-  const modelName = process.env.OPENAI_VISION_MODEL || "gpt-6.1-sol";
+  const modelName = "gpt-6.1-sol";
   await progress("AI is estimating walls, openings, and fixtures");
   const { output } = await generateText({
     model: createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(modelName),

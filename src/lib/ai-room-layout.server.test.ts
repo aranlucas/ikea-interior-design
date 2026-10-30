@@ -9,7 +9,6 @@ import { exampleAiRoomLayout } from "./ai-room-layout.fixture";
 afterEach(() => vi.unstubAllEnvs());
 it("sends all supplied room views in one structured vision request and records AI provenance", async () => {
   vi.stubEnv("OPENAI_API_KEY", "test-key");
-  vi.stubEnv("OPENAI_VISION_MODEL", "gpt-6.1-sol");
   vi.mocked(generateText).mockResolvedValueOnce({ output: exampleAiRoomLayout() } as Awaited<
     ReturnType<typeof generateText>
   >);
