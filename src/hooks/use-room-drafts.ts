@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { mutateRoom } from "../lib/room-mutation";
 import type { Room } from "../lib/types";
-import { api, json } from "../lib/studio-client";
+import { api, json, studioUrls } from "../lib/studio-client";
 import { useStudioData } from "../lib/studio-data";
 type Draft = { notes: string; style: string; status: "Saving…" | "Saved" | "" };
 export function useRoomDrafts(room: Room | undefined, onError: (message: string) => void) {
@@ -26,39 +27,36 @@ export function useRoomDrafts(room: Room | undefined, onError: (message: string)
       setTimeout(() => {
         timers.current.delete(id);
         // Query's scope serializes requests per room, even across room switches.
-        const mutation = client.getMutationCache().build(client, {
-          mutationKey: ["room-draft", id],
-          scope: { id: `room:${id}` },
-          mutationFn: async () => {
-            if (!rooms.has(id)) return;
-            await change(
-              async () => {
-                await update(
-                  await api<Room>("/api/rooms", {
-                    ...json({ roomId: id, notes: draft.notes, style: draft.style }),
-                    method: "PUT",
-                  }),
-                );
-              },
-              () =>
-                rooms.update(id, (value) => {
-                  value.notes = draft.notes;
-                  value.style = draft.style;
+        const pending = mutateRoom(client, id, async () => {
+          if (!rooms.has(id)) return;
+          await change(
+            async () => {
+              await update(
+                await api<Room>(studioUrls.rooms, {
+                  ...json({ roomId: id, notes: draft.notes, style: draft.style }),
+                  method: "PUT",
                 }),
-            );
-          },
-          onSuccess: () => finish("Saved"),
-          onError: (error: Error) => {
-            onError(error.message || "Could not save room.");
-            finish("");
-          },
+              );
+            },
+            () =>
+              rooms.update(id, (value) => {
+                value.notes = draft.notes;
+                value.style = draft.style;
+              }),
+          );
         });
         function finish(status: Draft["status"]) {
           if (latest.current[id] !== draft) return;
           latest.current = { ...latest.current, [id]: { ...draft, status } };
           setDrafts(latest.current);
         }
-        void mutation.execute(undefined).catch(() => {});
+        void pending.then(
+          () => finish("Saved"),
+          (error: Error) => {
+            onError(error.message || "Could not save room.");
+            finish("");
+          },
+        );
       }, 800),
     );
   }

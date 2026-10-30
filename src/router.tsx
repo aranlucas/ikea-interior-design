@@ -4,11 +4,7 @@ import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query
 import { createStudioData, StudioDataContext } from "./lib/studio-data";
 import { routeTree } from "./routeTree.gen";
 export function getRouter() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false },
-    },
-  });
+  const queryClient = new QueryClient();
   const data = createStudioData(queryClient);
   const router = createRouter({
     routeTree,

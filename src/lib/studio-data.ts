@@ -2,7 +2,7 @@ import { collectionOptions, createTransaction, DbClient } from "@tanstack/react-
 import { QueryClient } from "@tanstack/react-query";
 import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import { createContext, useContext } from "react";
-import { api } from "./studio-client";
+import { roomsOptions } from "./studio-queries";
 import type { Room } from "./types";
 
 export function createStudioData(queryClient: QueryClient) {
@@ -11,19 +11,14 @@ export function createStudioData(queryClient: QueryClient) {
     collectionOptions(
       queryCollectionOptions({
         id: "rooms",
-        queryKey: ["rooms"],
+        ...roomsOptions(),
         queryClient,
-        queryFn: () => api<Room[]>("/api/rooms"),
         getKey: (room) => room.id,
-        enabled: typeof window !== "undefined",
-        staleTime: Infinity,
-        retry: false,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
       }),
     ),
   );
   async function change(task: () => Promise<unknown>, optimistic: () => void) {
+    // The task must write confirmed server data before the optimistic layer is removed.
     const tx = createTransaction({ mutationFn: task });
     tx.mutate(optimistic);
     await tx.when("settled");
