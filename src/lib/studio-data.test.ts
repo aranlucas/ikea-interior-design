@@ -13,20 +13,12 @@ const room: Room = {
   designs: [],
   createdAt: "",
 };
+vi.mock("./studio-bootstrap", async () => {
+  const { api } = await import("./studio-client");
+  return { getStudioRooms: () => api("/api/rooms") };
+});
 afterEach(() => vi.unstubAllGlobals());
 describe("rooms collection", () => {
-  it("does not request rooms on the server", async () => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
-    const client = new QueryClient();
-    const { rooms } = createStudioData(client);
-    const unsubscribe = rooms.subscribeChanges(() => {});
-    await Promise.resolve();
-    expect(fetch).not.toHaveBeenCalled();
-    unsubscribe.unsubscribe();
-    await rooms.cleanup();
-    client.clear();
-  });
   it("rolls back failed optimistic edits and accepts server rooms without refetch", async () => {
     const fetch = vi.fn(async () => Response.json([room]));
     vi.stubGlobal("window", {});

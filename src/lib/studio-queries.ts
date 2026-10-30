@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api, studioUrls, type Session } from "./studio-client";
+import { getStudioRooms } from "./studio-bootstrap";
 import type { GenerationJob, Room } from "./types";
 
 // These endpoints describe the authenticated workspace. Generation is account-wide,
@@ -9,12 +10,9 @@ export const studioKeys = {
   session: () => [...studioKeys.all, "session"] as const,
   rooms: () => [...studioKeys.all, "rooms"] as const,
   generation: () => [...studioKeys.all, "generation"] as const,
-  roomMutation: (id: string) => [...studioKeys.all, "room", id] as const,
 };
 
-// Studio reads are client-only and refreshed explicitly (generation also polls).
-// The session is the gate: it never loads during SSR, and rooms/generation wait for its user.
-// Keep this policy local so future queries retain Query's normal defaults.
+// The route seeds session/rooms; room revalidation uses a cookie-aware server function.
 const studioReadOptions = {
   staleTime: Infinity,
   retry: false,
@@ -31,15 +29,13 @@ export const sessionOptions = () =>
     ...studioReadOptions,
     queryKey: studioKeys.session(),
     queryFn: ({ signal }) => api<Session>(studioUrls.session, { signal }),
-    enabled: typeof window !== "undefined",
   });
 
 // DB requires a concrete queryFn; queryOptions widens that field to optional.
 export const roomsOptions = () => ({
   ...studioReadOptions,
   queryKey: studioKeys.rooms(),
-  queryFn: ({ signal }: { signal: AbortSignal }) => api<Room[]>(studioUrls.rooms, { signal }),
-  enabled: typeof window !== "undefined",
+  queryFn: () => getStudioRooms(),
 });
 
 export const generationOptions = () =>
@@ -47,6 +43,7 @@ export const generationOptions = () =>
     ...studioReadOptions,
     queryKey: studioKeys.generation(),
     queryFn: ({ signal }) => api<GenerationResult>(studioUrls.generation, { signal }),
+    // Generation is deliberately not prefetched or polled on the server.
     enabled: typeof window !== "undefined",
     refetchInterval: (query) => generationInterval(query.state.data),
     refetchIntervalInBackground: true,

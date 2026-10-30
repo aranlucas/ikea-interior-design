@@ -1,24 +1,8 @@
-import { afterEach, expect, it, vi } from "vitest";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { expect, it } from "vitest";
 import { generationOptions, roomsOptions, sessionOptions } from "./studio-queries";
 
-afterEach(() => vi.unstubAllGlobals());
-it("disables all studio reads on the server without changing defaults for unrelated queries", async () => {
-  const fetch = vi.fn();
-  vi.stubGlobal("fetch", fetch);
-  const client = new QueryClient();
-  const observers = [
-    new QueryObserver(client, sessionOptions()),
-    new QueryObserver(client, roomsOptions()),
-    new QueryObserver(client, generationOptions()),
-  ];
-  const unsubscribes = observers.map((observer) => {
-    expect(observer.options.enabled).toBe(false);
-    return observer.subscribe(() => {});
-  });
-  await Promise.resolve();
-  expect(fetch).not.toHaveBeenCalled();
-  expect(client.getDefaultOptions()).toEqual({});
-  unsubscribes.forEach((unsubscribe) => unsubscribe());
-  client.clear();
+it("allows session/room loader prefetch but keeps generation client-only", () => {
+  expect(sessionOptions()).not.toHaveProperty("enabled");
+  expect(roomsOptions()).not.toHaveProperty("enabled");
+  expect(generationOptions().enabled).toBe(false);
 });

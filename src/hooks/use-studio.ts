@@ -1,27 +1,25 @@
 import { applyWatchedJob } from "../lib/watched-job";
 import { generationOptions, sessionOptions } from "../lib/studio-queries";
-import { mutateRoom } from "../lib/room-mutation";
 import { findProblems, useLiveQuery } from "@tanstack/react-db";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useStudioData } from "../lib/studio-data";
+import { useStudioData, studioRoomsQuery } from "../lib/studio-data";
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useRoomDrafts } from "./use-room-drafts";
 import type { Room, Asset } from "../lib/types";
 import { api, studioUrls, json, compress, type View, type Mode, type People, type Lighting } from "../lib/studio-client";
 export function useStudio() {
-  const { rooms, update, change } = useStudioData();
+  const { rooms, update, change, runRoom } = useStudioData();
   const queryClient = useQueryClient();
   const sessionQuery = useQuery(sessionOptions());
   const session = sessionQuery.data;
   const { data: all = [], health } = useLiveQuery({
-    query: (q) =>
-      session?.user
-        ? q.from({ room: rooms }).orderBy(({ room }) => room.createdAt, "desc")
-        : undefined,
+    ...studioRoomsQuery,
+    query: session?.user ? studioRoomsQuery.query : () => undefined,
   });
   const [chosenRoomId, chooseRoom] = useState<string>();
   const roomId = chosenRoomId ?? all[0]?.id ?? "";
   const setRoomId = (id: string) => chooseRoom(id);
+  const room = all.find((r) => r.id === roomId);
   const [modal, setModal] = useState<"room" | "reference" | "rename" | null>(null);
   const [sizeAsset, setSizeAsset] = useState<Asset | null>(null);
   const [error, setError] = useState("");
@@ -31,24 +29,25 @@ export function useStudio() {
   // Only the job this tab watched running may update the view or report an error.
   const watching = useRef<string | undefined>(undefined);
 
-  const [baseId, setBaseId] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
+  const [baseId, setBaseId] = useState(() => room?.assets.find((a) => a.kind === "room")?.id || "");
+  const [selected, setSelected] = useState<string[]>(
+    () => room?.assets.filter((a) => a.kind !== "room").map((a) => a.id) || [],
+  );
   const [designId, setDesignId] = useState("");
   const [view, setView] = useState<View>("design");
   const [split, setSplit] = useState(50);
   const [refine, setRefine] = useState(false);
   const [mode, setMode] = useState<Mode>("redesign");
-  const [measurements, setMeasurements] = useState("");
+  const [measurements, setMeasurements] = useState(() => room?.measurements || "");
   const [count, setCount] = useState<1 | 2 | 4>(1);
   const [people, setPeople] = useState<People>("none");
   const [lighting, setLighting] = useState<Lighting>("natural");
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const room = all.find((r) => r.id === roomId);
   const { notes, style, setNotes, setStyle, saveStatus } = useRoomDrafts(room, setError);
   const jobQuery = useQuery({
     ...generationOptions(),
-    enabled: !!session?.user,
+    enabled: !!session?.user && generationOptions().enabled,
   });
   const job = jobQuery.data?.job ?? null;
   const currentRoom = useRef(roomId);
@@ -108,7 +107,7 @@ export function useStudio() {
     setError("");
     setBusy(true);
     try {
-      await mutateRoom(queryClient, roomId, task);
+      await runRoom(roomId, task);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {

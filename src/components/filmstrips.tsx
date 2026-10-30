@@ -90,7 +90,7 @@ export function Filmstrips({ state }: { state: StudioState }) {
                 aria-pressed={active?.id === d.id}
                 disabled={generating}
                 aria-label={`Show design ${designs.length - i}`}
-                title={new Date(d.createdAt).toLocaleString()}
+                title={d.createdAt}
                 onClick={() => {
                   setDesignId(d.id);
                   setBaseId(d.baseId);

@@ -6,7 +6,28 @@ import { TopBar } from "../components/top-bar";
 import { StudioStage } from "../components/studio-stage";
 import { DesignPanel } from "../components/design-panel";
 import { StudioDialogs } from "../components/studio-dialogs";
-export const Route = createFileRoute("/")({ component: Studio });
+import { HydrationBoundary } from "@tanstack/react-db";
+import { getStudioBootstrap } from "../lib/studio-bootstrap";
+import { preloadStudio } from "../lib/studio-data";
+export const Route = createFileRoute("/")({
+  headers: () => ({ "Cache-Control": "private, no-store" }),
+  loader: async ({ context }) => ({
+    dbState: await preloadStudio(
+      context.queryClient,
+      context.studioData,
+      await getStudioBootstrap(),
+    ),
+  }),
+  component: StudioPage,
+});
+function StudioPage() {
+  const { dbState } = Route.useLoaderData();
+  return (
+    <HydrationBoundary state={dbState}>
+      <Studio />
+    </HydrationBoundary>
+  );
+}
 function Studio() {
   const state = useStudio();
   const { session, error, setError, busy, room, signed, create } = state;
