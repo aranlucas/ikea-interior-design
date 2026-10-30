@@ -1,7 +1,24 @@
 import { createRouter } from "@tanstack/react-router";
+import { QueryClient } from "@tanstack/react-query";
+import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
+import { createStudioData, StudioDataContext } from "./lib/studio-data";
 import { routeTree } from "./routeTree.gen";
 export function getRouter() {
-  return createRouter({ routeTree, scrollRestoration: true });
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false },
+    },
+  });
+  const data = createStudioData(queryClient);
+  const router = createRouter({
+    routeTree,
+    scrollRestoration: true,
+    Wrap: ({ children }) => (
+      <StudioDataContext.Provider value={data}>{children}</StudioDataContext.Provider>
+    ),
+  });
+  setupRouterSsrQueryIntegration({ router, queryClient });
+  return router;
 }
 declare module "@tanstack/react-router" {
   interface Register {
