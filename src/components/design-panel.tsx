@@ -13,10 +13,7 @@ export function DesignPanel({ state }: { state: StudioState }) {
   const {
     generating,
     saveStatus,
-    notes,
-    setNotes,
-    style,
-    setStyle,
+    draftFields,
     refine,
     setRefine,
     mode,
@@ -60,7 +57,7 @@ export function DesignPanel({ state }: { state: StudioState }) {
         <label className="field">
           <span>Style</span>
           <div className="select">
-            <select value={style} onChange={(e) => setStyle(e.target.value)}>
+            <select {...draftFields.style}>
               {styles.map((s) => (
                 <option key={s}>{s}</option>
               ))}
@@ -112,10 +109,9 @@ export function DesignPanel({ state }: { state: StudioState }) {
         <label className="field">
           <span>Brief</span>
           <textarea
-            value={notes}
+            {...draftFields.notes}
             maxLength={4000}
             rows={5}
-            onChange={(e) => setNotes(e.target.value)}
             placeholder="Keep the floors. Linen sofa by the window, oak side table."
           />
         </label>

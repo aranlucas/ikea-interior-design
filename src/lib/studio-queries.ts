@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api, studioUrls, type Session } from "./studio-client";
-import { getStudioRooms } from "./studio-bootstrap";
+import { getStudioRooms, getStudioRoom } from "./studio-bootstrap";
 import type { GenerationJob, Room } from "./types";
 
 // These endpoints describe the authenticated workspace. Generation is account-wide,
@@ -8,7 +8,8 @@ import type { GenerationJob, Room } from "./types";
 export const studioKeys = {
   all: ["studio"] as const,
   session: () => [...studioKeys.all, "session"] as const,
-  rooms: () => [...studioKeys.all, "rooms"] as const,
+  rooms: () => [...studioKeys.all, "room-summaries"] as const,
+  room: (id: string) => [...studioKeys.all, "room", id] as const,
   generation: () => [...studioKeys.all, "generation"] as const,
 };
 
@@ -48,3 +49,9 @@ export const generationOptions = () =>
     refetchInterval: (query) => generationInterval(query.state.data),
     refetchIntervalInBackground: true,
   });
+
+export const roomOptions = (id: string) => ({
+  ...studioReadOptions,
+  queryKey: studioKeys.room(id),
+  queryFn: async () => [await getStudioRoom({ data: id })],
+});

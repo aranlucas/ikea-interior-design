@@ -4,7 +4,11 @@ import { createStudioData } from "./studio-data";
 import type { Room } from "./types";
 vi.mock("./studio-bootstrap", async () => {
   const { api } = await import("./studio-client");
-  return { getStudioRooms: () => api("/api/rooms") };
+  return {
+    getStudioRooms: () => api("/api/rooms"),
+    getStudioRoom: async ({ data: id }: { data: string }) =>
+      (await api<Room[]>("/api/rooms")).find((r) => r.id === id)!,
+  };
 });
 const room: Room = {
   id: "a",
@@ -34,7 +38,8 @@ async function setup() {
   vi.stubGlobal("fetch", fetch);
   const client = new QueryClient();
   const data = createStudioData(client);
-  await data.rooms.preload();
+  await data.summaries.preload();
+  await Promise.all([data.getRoom("a").preload(), data.getRoom("b").preload()]);
   vi.useFakeTimers();
   return {
     data,
@@ -54,7 +59,7 @@ it("merges typing into the newest text after a 500ms quiet period and saves the 
   const latest = data.saveDraft("a", { notes: "newest", style: "Scandinavian" });
   const other = data.saveDraft("b", { notes: "other", style: "Japandi" });
   expect(first).toBe(latest);
-  expect(data.rooms.get("a")?.notes).toBe("newest");
+  expect(data.getRoom("a").get("a")?.notes).toBe("newest");
   await vi.advanceTimersByTimeAsync(499);
   expect(writes).toHaveLength(0);
   await vi.advanceTimersByTimeAsync(1);
@@ -75,20 +80,20 @@ it("drains autosave before rename and deletion, never resurrecting the deleted r
   });
   await vi.advanceTimersByTimeAsync(500);
   await renamed;
-  expect(data.rooms.get("a")?.name).toBe("Renamed");
+  expect(data.getRoom("a").get("a")?.name).toBe("Renamed");
   const next = data.saveDraft("a", { notes: "before delete", style: "Japandi" });
   const deleted = data.runRoom("a", async () => {
-    await data.rooms.utils.writeDelete("a");
+    await data.getRoom("a").utils.writeDelete("a");
   });
   await vi.advanceTimersByTimeAsync(500);
   await Promise.all([tx.when("settled"), next.when("settled"), deleted]);
   await vi.advanceTimersByTimeAsync(2000);
-  expect(data.rooms.has("a")).toBe(false);
+  expect(data.getRoom("a").has("a")).toBe(false);
   // A stale editor submitting after deletion cannot upsert its former room.
   const stale = data.saveDraft("a", { notes: "late", style: "Japandi" });
   await vi.advanceTimersByTimeAsync(500);
   await stale.when("settled");
-  expect(data.rooms.has("a")).toBe(false);
+  expect(data.getRoom("a").has("a")).toBe(false);
   await close();
 });
 it("rolls back failed paced writes and lets later saves and operations proceed", async () => {
@@ -98,11 +103,11 @@ it("rolls back failed paced writes and lets later saves and operations proceed",
   const rejection = expect(failed.when("settled")).rejects.toThrow("Denied");
   await vi.advanceTimersByTimeAsync(500);
   await rejection;
-  expect(data.rooms.get("a")?.notes).toBe("");
+  expect(data.getRoom("a").get("a")?.notes).toBe("");
   const retry = data.saveDraft("a", { notes: "recovered", style: "Japandi" });
   await vi.advanceTimersByTimeAsync(500);
   await retry.when("settled");
-  expect(data.rooms.get("a")?.notes).toBe("recovered");
+  expect(data.getRoom("a").get("a")?.notes).toBe("recovered");
   await close();
 });
 
@@ -126,9 +131,24 @@ it("serializes a held save, rename, and newer pending save without overwriting t
   });
   const newest = data.saveDraft("a", { notes: "newest", style: "Scandinavian" });
   await vi.advanceTimersByTimeAsync(500);
-  expect(data.rooms.get("a")?.notes).toBe("newest");
+  expect(data.getRoom("a").get("a")?.notes).toBe("newest");
   release();
   await Promise.all([old.when("settled"), newest.when("settled"), rename]);
-  expect(data.rooms.get("a")).toMatchObject({ notes: "newest", name: "Kept rename" });
+  expect(data.getRoom("a").get("a")).toMatchObject({ notes: "newest", name: "Kept rename" });
+  await close();
+});
+
+it("retains request-local form values across editor mounts without copying server responses over typing", async () => {
+  const { data, close } = await setup();
+  const editor = data.draftForm(room);
+  editor.formControl.subscribe({ formState: { values: true }, callback: () => {} });
+  editor.setValue("notes", "Unsaved local text");
+  await data.update({ ...room, notes: "Older server text" });
+  expect(data.draftForm(room)).toBe(editor);
+  expect(editor.getValues("notes")).toBe("Unsaved local text");
+  const other = createStudioData(new QueryClient());
+  expect(other.draftForm(room)).not.toBe(editor);
+  expect(other.draftForm(room).getValues("notes")).toBe("");
+  await other.db.cleanup();
   await close();
 });

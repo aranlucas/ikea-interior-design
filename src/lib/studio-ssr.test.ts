@@ -4,20 +4,24 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { getRouter } from "../router";
-import { getStudioBootstrap } from "./studio-bootstrap";
+import { getStudioBootstrap, getStudioRoom } from "./studio-bootstrap";
 import { QueryClient } from "@tanstack/react-query";
 import { renderToString } from "react-dom/server";
 import { createElement } from "react";
 import { DbProvider, HydrationBoundary, useLiveQuery } from "@tanstack/react-db";
 import { createStudioData, preloadStudio, studioRoomsQuery } from "./studio-data";
-import { readStudio } from "./studio-bootstrap.server";
+import { readStudio, readStudioRoom } from "./studio-bootstrap.server";
 import { seal } from "./auth.server";
 import * as storage from "./storage.server";
 import { saveRooms } from "./storage.server";
 import { studioKeys } from "./studio-queries";
 import type { Room } from "./types";
+vi.mock("../styles.css?url", () => ({ default: "/test-styles.css" }));
 vi.mock("./studio-bootstrap", () => ({
   getStudioBootstrap: vi.fn(),
+  getStudioRoom: vi.fn(() => {
+    throw new Error("Unexpected detail read");
+  }),
   getStudioRooms: vi.fn(() => {
     throw new Error("Unexpected rooms read");
   }),
@@ -66,7 +70,7 @@ it("isolates concurrent authenticated requests and hydrates each user's first re
   expect(requests[0].data.db).not.toBe(requests[1].data.db);
   for (const { sub, client, data, state } of requests) {
     expect(client.getQueryData(studioKeys.session())).toMatchObject({ user: { sub } });
-    expect(Array.from(data.rooms.values()).map((r) => r.id)).toEqual([`${sub}-room`]);
+    expect(Array.from(data.summaries.values()).map((r) => r.id)).toEqual([`${sub}-room`]);
     const browser = createStudioData(new QueryClient());
     const html = renderToString(
       createElement(
@@ -116,7 +120,7 @@ it("renders the actual signed-out route as a sign-in card without rooms", async 
   const router = getRouter();
   router.update({
     context: router.options.context,
-    history: createMemoryHistory({ initialEntries: ["/"] }),
+    history: createMemoryHistory({ initialEntries: ["/rooms"] }),
   });
   await router.load();
   const html = renderToString(createElement(RouterProvider, { router }));
@@ -127,4 +131,63 @@ it("renders the actual signed-out route as a sign-in card without rooms", async 
   readRooms.mockRestore();
   await router.options.context.studioData.db.cleanup();
   router.options.context.queryClient.clear();
+});
+
+it("returns picker summaries without room details and enforces detail ownership", async () => {
+  const token = await seal({ sub: "summary-owner" });
+  const request = new Request("https://roomform.test/", {
+    headers: { cookie: `roomform_session=${token}` },
+  });
+  const full = { ...room("summary-room"), notes: "Private brief", measurements: "4 x 3 m" };
+  await saveRooms("summary-owner", [full]);
+  const initial = await readStudio(request);
+  expect(initial.rooms).toEqual([
+    { id: full.id, name: full.name, type: full.type, createdAt: full.createdAt },
+  ]);
+  expect(await readStudioRoom(request, full.id)).toEqual(full);
+  await expect(
+    readStudioRoom(new Request("https://roomform.test/"), full.id),
+  ).rejects.toMatchObject({ status: 404 });
+  await expect(readStudioRoom(request, "someone-elses-room")).rejects.toMatchObject({
+    status: 404,
+  });
+});
+it("server-renders a room deep link with a room-specific cache and returns 404 for a missing room", async () => {
+  const full = { ...room("deep-link"), notes: "Deep-link brief", measurements: "4 x 3 m" };
+  vi.mocked(getStudioBootstrap).mockResolvedValue({
+    session: {
+      user: { sub: "route-owner", name: "Owner" },
+      local: false,
+      authConfigured: true,
+      generationConfigured: false,
+    },
+    rooms: [full],
+  });
+  vi.mocked(getStudioRoom).mockResolvedValue(full);
+  const router = getRouter();
+  router.update({
+    context: router.options.context,
+    history: createMemoryHistory({ initialEntries: ["/rooms/deep-link"] }),
+  });
+  await router.load();
+  const html = renderToString(createElement(RouterProvider, { router }));
+  expect(html).toContain("Deep-link brief");
+  expect(html).toContain('data-room-id="deep-link"');
+  expect(html).not.toContain('aria-label="Loading"');
+  expect(router.options.context.queryClient.getQueryData(studioKeys.room(full.id))).toEqual([full]);
+  expect(getStudioRoom).toHaveBeenCalledWith({ data: full.id });
+  await router.options.context.studioData.db.cleanup();
+  router.options.context.queryClient.clear();
+  const missing = getRouter();
+  missing.update({
+    context: missing.options.context,
+    history: createMemoryHistory({ initialEntries: ["/rooms/missing"] }),
+  });
+  await missing.load();
+  expect(missing.state.matches.some((match) => match.status === "notFound")).toBe(true);
+  expect(renderToString(createElement(RouterProvider, { router: missing }))).toContain(
+    "Room not found",
+  );
+  await missing.options.context.studioData.db.cleanup();
+  missing.options.context.queryClient.clear();
 });

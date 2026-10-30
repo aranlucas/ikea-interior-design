@@ -15,7 +15,10 @@ const room: Room = {
 };
 vi.mock("./studio-bootstrap", async () => {
   const { api } = await import("./studio-client");
-  return { getStudioRooms: () => api("/api/rooms") };
+  return {
+    getStudioRooms: () => api("/api/rooms"),
+    getStudioRoom: async () => (await api<Room[]>("/api/rooms"))[0],
+  };
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("rooms collection", () => {
@@ -24,7 +27,10 @@ describe("rooms collection", () => {
     vi.stubGlobal("window", {});
     vi.stubGlobal("fetch", fetch);
     const client = new QueryClient();
-    const { rooms, change, update } = createStudioData(client);
+    const data = createStudioData(client);
+    const { change, update } = data;
+    const rooms = data.getRoom(room.id);
+    await data.summaries.preload();
     await rooms.preload();
     let reject!: (error: Error) => void;
     const pending = change(
@@ -51,9 +57,9 @@ describe("rooms collection", () => {
         }),
     );
     expect(rooms.get(room.id)?.name).toBe("Server");
-    expect(client.getQueryData<Room[]>(studioKeys.rooms())?.[0].name).toBe("Server");
-    expect(fetch).toHaveBeenCalledTimes(1);
-    await rooms.cleanup();
+    expect(client.getQueryData<Room[]>(studioKeys.room(room.id))?.[0].name).toBe("Server");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await data.db.cleanup();
     client.clear();
   });
 });
@@ -63,7 +69,8 @@ it("exposes initial and background fetch failures through collection health, kee
   const fetch = vi.fn().mockResolvedValue(Response.json({ error: "Denied" }, { status: 403 }));
   vi.stubGlobal("fetch", fetch);
   const client = new QueryClient();
-  const { rooms } = createStudioData(client);
+  const data = createStudioData(client);
+  const rooms = data.getRoom(room.id);
   await expect(rooms.preload()).rejects.toThrow("Denied");
   expect(rooms.health.error?.message).toBe("Denied");
   fetch.mockImplementation(async () => Response.json([room]));
@@ -73,6 +80,6 @@ it("exposes initial and background fetch failures through collection health, kee
   await expect(rooms.utils.refetch({ throwOnError: true })).rejects.toThrow("Offline");
   expect(rooms.get(room.id)?.name).toBe("Before");
   expect(rooms.health.failureReason?.message).toBe("Offline");
-  await rooms.cleanup();
+  await data.db.cleanup();
   client.clear();
 });

@@ -2,13 +2,24 @@ import { applyWatchedJob } from "../lib/watched-job";
 import { generationOptions, sessionOptions } from "../lib/studio-queries";
 import { findProblems, useLiveQuery } from "@tanstack/react-db";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useStudioData, studioRoomsQuery } from "../lib/studio-data";
+import { useStudioData, studioRoomsQuery, studioRoomQuery } from "../lib/studio-data";
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useStudioError } from "../lib/studio-feedback";
 import { useRoomDrafts } from "./use-room-drafts";
 import type { Room, Asset } from "../lib/types";
-import { api, studioUrls, json, compress, type View, type Mode, type People, type Lighting } from "../lib/studio-client";
-export function useStudio() {
-  const { rooms, update, change, runRoom } = useStudioData();
+import {
+  api,
+  studioUrls,
+  json,
+  compress,
+  type View,
+  type Mode,
+  type People,
+  type Lighting,
+} from "../lib/studio-client";
+export function useStudio(roomId: string) {
+  const { getRoom, update, change, runRoom, summaries, watching } = useStudioData();
   const queryClient = useQueryClient();
   const sessionQuery = useQuery(sessionOptions());
   const session = sessionQuery.data;
@@ -16,18 +27,19 @@ export function useStudio() {
     ...studioRoomsQuery,
     query: session?.user ? studioRoomsQuery.query : () => undefined,
   });
-  const [chosenRoomId, chooseRoom] = useState<string>();
-  const roomId = chosenRoomId ?? all[0]?.id ?? "";
-  const setRoomId = (id: string) => chooseRoom(id);
-  const room = all.find((r) => r.id === roomId);
+  const navigate = useNavigate();
+  const setRoomId = (id: string) =>
+    id ? navigate({ to: "/rooms/$roomId", params: { roomId: id } }) : navigate({ to: "/rooms" });
+  const rooms = getRoom(roomId);
+  const { data: room, health: roomHealth } = useLiveQuery({
+    ...studioRoomQuery(roomId),
+    query: roomId ? studioRoomQuery(roomId).query : () => undefined,
+  });
   const [modal, setModal] = useState<"room" | "reference" | "rename" | null>(null);
   const [sizeAsset, setSizeAsset] = useState<Asset | null>(null);
-  const [error, setError] = useState("");
+  const setError = useStudioError();
   const [busy, setBusy] = useState(false);
   const [starting, setStarting] = useState(false);
-
-  // Only the job this tab watched running may update the view or report an error.
-  const watching = useRef<string | undefined>(undefined);
 
   const [baseId, setBaseId] = useState(() => room?.assets.find((a) => a.kind === "room")?.id || "");
   const [selected, setSelected] = useState<string[]>(
@@ -44,7 +56,7 @@ export function useStudio() {
   const [lighting, setLighting] = useState<Lighting>("natural");
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const { notes, style, setNotes, setStyle, saveStatus } = useRoomDrafts(room, setError);
+  const { draftFields, getDraft, saveStatus } = useRoomDrafts(room, setError);
   const jobQuery = useQuery({
     ...generationOptions(),
     enabled: !!session?.user && generationOptions().enabled,
@@ -69,20 +81,8 @@ export function useStudio() {
     });
   }, [jobQuery.data, update]);
   const generating = starting || (job?.status === "running" && job.roomId === roomId);
-  const [selectionRoom, setSelectionRoom] = useState(roomId);
-  if (selectionRoom !== roomId) {
-    setSelectionRoom(roomId);
-    setBaseId(room?.assets.find((a) => a.kind === "room")?.id || "");
-    setSelected(room?.assets.filter((a) => a.kind !== "room").map((a) => a.id) || []);
-    setMeasurements(room?.measurements || "");
-    setMode("redesign");
-    setPeople("none");
-    setLighting("natural");
-    setDesignId("");
-    setView("design");
-    setRefine(false);
-  }
-  const roomProblem = health && findProblems(health)[0];
+  const problemHealth = roomHealth?.hasErrors ? roomHealth : health;
+  const roomProblem = problemHealth && findProblems(problemHealth)[0];
   const roomError = roomProblem && (roomProblem.error || roomProblem.failureReason);
   const queryError = sessionQuery.error || roomError || jobQuery.error;
   const [seenError, setSeenError] = useState<typeof queryError>(null);
@@ -118,7 +118,7 @@ export function useStudio() {
     await run(async () => {
       const r = await api<Room>(studioUrls.rooms, json({ type }));
       await update(r);
-      setRoomId(r.id);
+      await setRoomId(r.id);
       setModal(null);
     });
   }
@@ -207,10 +207,14 @@ export function useStudio() {
             }),
           );
         },
-        () =>
+        () => {
           rooms.update(room.id, (draft) => {
             draft.name = name;
-          }),
+          });
+          summaries.update(room.id, (draft) => {
+            draft.name = name;
+          });
+        },
       );
       setModal(null);
     });
@@ -255,10 +259,14 @@ export function useStudio() {
             method: "DELETE",
           });
           await rooms.utils.writeDelete(id);
+          await summaries.utils.writeDelete(id);
         },
-        () => rooms.delete(id),
+        () => {
+          rooms.delete(id);
+          summaries.delete(id);
+        },
       );
-      setRoomId(all.find((r) => r.id !== id)?.id || "");
+      await setRoomId(all.find((r) => r.id !== id)?.id || "");
       setModal(null);
     });
   }
@@ -301,8 +309,8 @@ export function useStudio() {
       const r = await generationMutation.mutateAsync({
         roomId: room.id,
         baseId: base.id,
-        notes,
-        style,
+        notes: getDraft().notes,
+        style: getDraft().style,
         assetIds: selected,
         previousDesignId: refine ? active?.id : undefined,
         mode,
@@ -338,7 +346,7 @@ export function useStudio() {
       await change(
         async () => {
           await update(
-            await api<Room>("/api/rooms", {
+            await api<Room>(studioUrls.rooms, {
               ...json({ roomId: room.id, designId, starred }),
               method: "PUT",
             }),
@@ -367,7 +375,6 @@ export function useStudio() {
     setModal,
     sizeAsset,
     setSizeAsset,
-    error,
     setError,
     busy,
     setBusy,
@@ -379,10 +386,7 @@ export function useStudio() {
     setBaseId,
     selected,
     setSelected,
-    notes,
-    setNotes,
-    style,
-    setStyle,
+    draftFields,
     designId,
     setDesignId,
     view,
