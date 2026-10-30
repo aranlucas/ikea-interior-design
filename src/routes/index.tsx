@@ -13,7 +13,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { assetUrl, type Room, type User, type Asset } from "../lib/types";
+import { assetUrl, type Room, type User, type Asset, type GenerationJob } from "../lib/types";
 export const Route = createFileRoute("/")({ component: Studio });
 type Session = {
   user: User | null;
@@ -59,7 +59,9 @@ function Studio() {
   const [sizeAsset, setSizeAsset] = useState<Asset | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [job, setJob] = useState<GenerationJob | null>(null);
+  const generating = starting || (job?.status === "running" && job.roomId === roomId);
   const [baseId, setBaseId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
@@ -80,7 +82,7 @@ function Studio() {
   const shown = design ? view : "photo";
   const active = shown === "photo" ? undefined : design;
   const before = design && photos.find((a) => a.id === design.baseId);
-  const locked = busy || generating;
+  const locked = busy || starting || job?.status === "running";
   const me = session?.user;
   const signed = !!me;
   useEffect(() => {
@@ -107,6 +109,38 @@ function Studio() {
   useEffect(() => {
     if (!active) setRefine(false);
   }, [active?.id]);
+  useEffect(() => {
+    if (!signed) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const result = await api<{ job: GenerationJob | null; room?: Room }>("/api/generate");
+        if (cancelled) return;
+        setJob(result.job);
+        if (result.job && result.job.status !== "running") {
+          if (result.room) {
+            update(result.room);
+            if (result.room.id === roomId) {
+              setDesignId(result.job.designId || "");
+              setView("design");
+            }
+          }
+          if (result.job.status === "failed") setError(result.job.error || "Generation failed.");
+          return;
+        }
+      } catch (error) {
+        if (!cancelled)
+          setError(error instanceof Error ? error.message : "Could not check generation.");
+      }
+      if (!cancelled) timer = setTimeout(() => void poll(), 3000);
+    }
+    void poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [signed, roomId, job?.id]);
   function update(r: Room) {
     setAll((prev) => [r, ...prev.filter((x) => x.id !== r.id)]);
   }
@@ -239,10 +273,10 @@ function Studio() {
   }
   async function generate() {
     if (!room || !base) return;
-    setGenerating(true);
+    setStarting(true);
     setError("");
     try {
-      const r = await api<Room>(
+      const r = await api<{ jobId: string }>(
         "/api/generate",
         json({
           roomId: room.id,
@@ -253,13 +287,20 @@ function Studio() {
           previousDesignId: refine ? active?.id : undefined,
         }),
       );
-      update(r);
-      setDesignId(r.designs[0].id);
-      setView("design");
+      setJob({
+        id: r.jobId,
+        owner: "",
+        roomId: room.id,
+        status: "running",
+        error: null,
+        designId: null,
+        createdAt: "",
+        updatedAt: "",
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed.");
     } finally {
-      setGenerating(false);
+      setStarting(false);
     }
   }
   function drop(e: DragEvent) {

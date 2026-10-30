@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
-import type { Room } from "./types";
+import type { GenerationJob, Room } from "./types";
 export const ownerPrefix = (sub: string) =>
   `users/${createHash("sha256").update(sub).digest("hex")}/`;
 let database: DatabaseSync | undefined;
@@ -14,6 +14,16 @@ function db() {
   database.exec(
     "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS objects (key TEXT PRIMARY KEY, data BLOB NOT NULL, content_type TEXT NOT NULL); CREATE TABLE IF NOT EXISTS generation_leases (owner TEXT PRIMARY KEY, expires INTEGER NOT NULL);",
   );
+  database.exec(
+    "CREATE TABLE IF NOT EXISTS generation_jobs (id TEXT PRIMARY KEY, owner TEXT NOT NULL, roomId TEXT NOT NULL, status TEXT NOT NULL, error TEXT, designId TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL); CREATE INDEX IF NOT EXISTS jobs_owner_created ON generation_jobs(owner, createdAt);",
+  );
+  // This app runs one replica. A new connection belongs to a new server process.
+  database
+    .prepare(
+      "UPDATE generation_jobs SET status='failed', error=?, updatedAt=? WHERE status='running'",
+    )
+    .run("Generation interrupted by a server restart. Please try again.", new Date().toISOString());
+  database.exec("DELETE FROM generation_leases");
   return database;
 }
 export async function save(key: string, data: Uint8Array | string, contentType: string) {
@@ -85,4 +95,44 @@ export async function deleteRoom(sub: string, roomId: string) {
     all.splice(index, 1);
     return true;
   });
+}
+
+export function createJob(owner: string, roomId: string): GenerationJob {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db()
+    .prepare(
+      "INSERT INTO generation_jobs (id,owner,roomId,status,createdAt,updatedAt) VALUES (?,?,?,'running',?,?)",
+    )
+    .run(id, owner, roomId, now, now);
+  return getJob(owner, id)!;
+}
+export function finishJob(
+  owner: string,
+  id: string,
+  result: { designId: string } | { error: string },
+) {
+  db()
+    .prepare(
+      "UPDATE generation_jobs SET status=?,error=?,designId=?,updatedAt=? WHERE owner=? AND id=? AND status='running'",
+    )
+    .run(
+      "error" in result ? "failed" : "succeeded",
+      "error" in result ? result.error : null,
+      "designId" in result ? result.designId : null,
+      new Date().toISOString(),
+      owner,
+      id,
+    );
+}
+export function getJob(owner: string, id?: string): GenerationJob | undefined {
+  const connection = db();
+  const row = id
+    ? connection.prepare("SELECT * FROM generation_jobs WHERE owner=? AND id=?").get(owner, id)
+    : connection
+        .prepare(
+          "SELECT * FROM generation_jobs WHERE owner=? ORDER BY createdAt DESC, rowid DESC LIMIT 1",
+        )
+        .get(owner);
+  return row as GenerationJob | undefined;
 }
