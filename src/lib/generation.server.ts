@@ -53,6 +53,10 @@ export async function startGeneration(owner: string, input: z.infer<typeof desig
       prompt += ` The final image is the previous design. Refine that design using the client brief, while keeping image 1 as the architectural authority.`;
     }
   }
+  if (input.fillGaps) {
+    prompt +=
+      " This is an optional AI finish of a partial photo reconstruction. Keep all architecture and contents visible in the original photos consistent across views. Fill visual gaps conservatively without claiming that inferred areas were observed or measured. Produce a single finished room image; this output does not add measured geometry to the 3D reconstruction.";
+  }
   if (!claimGeneration(u.sub))
     throw new Error("A design is already being generated. Please wait for it to finish.");
   let job;
@@ -92,6 +96,7 @@ export async function startGeneration(owner: string, input: z.infer<typeof desig
         prompt: input.notes,
         createdAt: new Date().toISOString(),
         baseId: base.id,
+        inferred: input.fillGaps || undefined,
       });
       return target;
     });

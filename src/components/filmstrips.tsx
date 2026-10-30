@@ -30,7 +30,7 @@ export function Filmstrips({ state }: { state: StudioState }) {
               className="thumb"
               aria-pressed={
                 (shown === "photo" && base?.id === a.id) ||
-                (shown !== "photo" && !!design && design.baseId === a.id)
+                ((shown === "design" || shown === "compare") && !!design && design.baseId === a.id)
               }
               disabled={locked}
               aria-label={`Show ${a.name}`}

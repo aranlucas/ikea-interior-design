@@ -8,7 +8,44 @@ export type Asset = {
   dimensions?: string;
   availableSizes?: string[];
 };
-export type Design = { id: string; key: string; prompt: string; createdAt: string; baseId: string };
+export type Design = {
+  id: string;
+  key: string;
+  prompt: string;
+  createdAt: string;
+  baseId: string;
+  inferred?: boolean;
+};
+export type RoomSurface = "back" | "right" | "front" | "left";
+export type RoomModel = {
+  width: number;
+  depth: number;
+  height: number;
+  walls: Partial<Record<RoomSurface, string>>;
+};
+export type ReconstructionResult = {
+  id: string;
+  key: string;
+  photoIds: string[];
+  registeredIds: string[];
+  pointCount: number;
+  components: number;
+  kind?: "sparse" | "ai-layout";
+  sourcePhotoIds?: string[];
+  model?: string;
+  fixtureCount?: number;
+};
+export type ReconstructionJob = {
+  id: string;
+  status: "running" | "succeeded" | "failed" | "cancelled";
+  stage: string;
+  error?: string;
+  photoIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  mode?: "classical" | "ai-layout";
+  result?: ReconstructionResult;
+};
 export type Room = {
   id: string;
   name: string;
@@ -17,6 +54,8 @@ export type Room = {
   style: string;
   assets: Asset[];
   designs: Design[];
+  model?: RoomModel;
+  reconstruction?: ReconstructionJob;
   createdAt: string;
 };
 export type User = { sub: string; name: string; email?: string };
