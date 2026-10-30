@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { scaleNotes } from "./scale";
 import { roomModelInput } from "./room-model";
+import { roomGuideInput, type RoomGuideConstraints } from "./room-guide";
 export const roomInput = z.object({
   name: z.string().trim().max(100).optional(),
   type: z.string().trim().min(1).max(60).default("Living room"),
@@ -32,6 +33,7 @@ export const designInput = z.object({
   people: z.enum(peopleOptions).default("none"),
   lighting: z.enum(lightingOptions).default("natural"),
   fillGaps: z.boolean().optional(),
+  roomGuide: roomGuideInput.optional(),
 });
 export const uuid = z.uuid();
 
@@ -60,6 +62,7 @@ export function buildPrompt(
   references: { name: string; kind: string; notes?: string; url?: string; dimensions?: string }[],
   roomCount: number,
   plan?: string,
+  guide?: RoomGuideConstraints,
 ) {
   const referenceList = references
     .map(
@@ -78,16 +81,23 @@ export function buildPrompt(
     .join(" ");
   const parts = [
     `You are an expert interior designer producing a photorealistic visualization of ${roomName}.`,
-    MODE_DIRECTIVES[input.mode],
+    guide
+      ? `Image 1 is the client's chosen 3D camera/layout guide, a clean render of an AI-estimated room. Keep this exact viewpoint, framing, left/right orientation, footprint, openings, and fixed elements. Preserve the cutaway or overhead composition if shown; do not switch to a source photo's camera. Apply the requested design task: ${input.mode === "empty" ? "remove movable furnishings, retain permanent fixtures" : input.mode === "stage" ? "furnish the empty room" : "create a furnished photorealistic interior"}. The render's simplified colors, amber uncertainty tint, and transparency are diagram conventions, not finishes to reproduce.`
+      : MODE_DIRECTIVES[input.mode],
     scene,
-    roomCount > 1
-      ? `Additional room images (images 2 through ${roomCount}) show the same room from other angles and are architectural context only.`
-      : "",
+    guide
+      ? `Images 2 through ${roomCount} are original room photos in the saved layout's source-photo order (photoNumber 1 is image 2). Use them as appearance and evidence for materials, windows, doors, fixtures, and daylight, not as the output camera. Where evidence conflicts with estimated geometry, retain photo-supported details and resolve uncertainty conservatively without inventing observed space.`
+      : roomCount > 1
+        ? `Additional room images (images 2 through ${roomCount}) show the same room from other angles and are architectural context only.`
+        : "",
     input.measurements
       ? `Client-supplied room measurements: ${input.measurements}. These are the physical scale authority for the scene.`
       : "",
     plan
       ? `A prior vision analysis of image 1 produced this placement plan — follow its geometry and placements: ${plan}`
+      : "",
+    guide
+      ? `Saved architectural constraints (AI estimates, NOT measurements): ${JSON.stringify(guide.layout)}. All proportions, positions, and sizes in this layout are estimated, including elements marked visible; visible means photo-supported presence only. Inferred elements and assumptions remain uncertain. Client-supplied measurements override estimated scale. The stored layout uses plan coordinates (+x right facing +z); the render reflects x once into y-up Three.js coordinates and negates fixture yaw. Do not mirror the rendered view. Captured camera in scene coordinates and visibility settings: ${JSON.stringify(guide.capture)}. Hidden inferred structure or fixtures are omitted only from the render, not evidence of absence. Do not fill hidden regions as if observed. This is a separate visualization; it does not update the reconstruction or guarantee exact adherence.`
       : "",
     references.length
       ? `Later images are furniture/product or style references, in this order:\n${referenceList}\nReproduce referenced products' recognizable form, color and materials. Respect their physical sizes and place them at plausible scale with realistic shadows and unobstructed circulation.`

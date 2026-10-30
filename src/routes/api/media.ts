@@ -12,14 +12,16 @@ export const Route = createFileRoute("/api/media")({
           if (
             !key.startsWith(ownerPrefix(u.sub)) ||
             key.includes("..") ||
-            !/\.(png|jpeg|webp)$/.test(key)
+            !/(\.(png|jpeg|webp)|-layout\.json)$/.test(key)
           )
             return new Response("Not found", { status: 404 });
           const bytes = await load(key);
           if (!bytes) return new Response("Not found", { status: 404 });
           return new Response(Buffer.from(bytes), {
             headers: {
-              "Content-Type": `image/${key.split(".").pop()}`,
+              "Content-Type": key.endsWith("-layout.json")
+                ? "application/json"
+                : `image/${key.split(".").pop()}`,
               "Cache-Control": "private, max-age=31536000, immutable",
               "X-Content-Type-Options": "nosniff",
             },

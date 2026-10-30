@@ -34,6 +34,9 @@ export async function deleteDesign(owner: string, roomId: string, designId: stri
     if (!room || !design) throw new Response("Design not found", { status: 404 });
     // Same SQLite transaction removes both the blob and its room record.
     if (design.key.startsWith(ownerPrefix(owner))) remove(design.key);
+    for (const key of [design.guide?.key, design.guide?.layoutKey]) {
+      if (key?.startsWith(`${ownerPrefix(owner)}${roomId}/`)) remove(key);
+    }
     room.designs = room.designs.filter((d) => d.id !== designId);
     return room;
   });

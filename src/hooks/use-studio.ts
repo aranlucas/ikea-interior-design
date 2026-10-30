@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "rea
 import { useNavigate } from "@tanstack/react-router";
 import { useStudioError } from "../lib/studio-feedback";
 import { useRoomDrafts } from "./use-room-drafts";
+import type { RoomGuide } from "../lib/room-guide";
 import type { Room, Asset } from "../lib/types";
 import {
   api,
@@ -303,7 +304,7 @@ export function useStudio(roomId: string) {
   const generationMutation = useMutation({
     mutationFn: (body: unknown) => api<{ jobId: string }>(studioUrls.generation, json(body)),
   });
-  async function generate(options?: { fillGaps?: boolean }) {
+  async function generate(options?: { fillGaps?: boolean; roomGuide?: RoomGuide }) {
     if (!room || !base) return;
     setStarting(true);
     setError("");
@@ -322,6 +323,7 @@ export function useStudio(roomId: string) {
         people,
         lighting,
         fillGaps: options?.fillGaps,
+        roomGuide: options?.roomGuide,
       });
       watching.current = r.jobId;
       queryClient.setQueryData(generationOptions().queryKey, {

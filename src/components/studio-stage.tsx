@@ -31,8 +31,10 @@ export function StudioStage({ state }: { state: StudioState }) {
     setDesignId,
   } = state;
   const room = state.room!;
+  const comparisonKey = design?.guide?.key || before?.key;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (shown === "room") return;
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
       if (modal || sizeAsset || locked) return;
@@ -54,7 +56,7 @@ export function StudioStage({ state }: { state: StudioState }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [photos, base, modal, sizeAsset, locked, setBaseId, setDesignId, setView]);
+  }, [photos, base, modal, sizeAsset, locked, shown, setBaseId, setDesignId, setView]);
   return (
     <section className="stage">
       <div className="stage-bar">
@@ -65,7 +67,7 @@ export function StudioStage({ state }: { state: StudioState }) {
                 <button
                   key={v}
                   aria-pressed={shown === v}
-                  disabled={v === "compare" && !before}
+                  disabled={v === "compare" && !comparisonKey}
                   onClick={() => setView(v)}
                 >
                   {v === "photo"
@@ -133,9 +135,14 @@ export function StudioStage({ state }: { state: StudioState }) {
             </Suspense>
           </div>
         )}
-        {shown === "room" && photos.length ? null : shown === "compare" && design && before ? (
+        {shown === "room" && photos.length ? null : shown === "compare" &&
+          design &&
+          comparisonKey ? (
           <>
-            <img src={assetUrl(before.key)} alt="Original photo" />
+            <img
+              src={assetUrl(comparisonKey)}
+              alt={design.guide ? "Captured 3D guide" : "Original photo"}
+            />
             <div className="after" style={{ clipPath: `inset(0 0 0 ${split}%)` }}>
               <img src={assetUrl(design.key)} alt="Design" />
             </div>
@@ -150,10 +157,12 @@ export function StudioStage({ state }: { state: StudioState }) {
               min="0"
               max="100"
               value={split}
-              aria-label="Compare original and design"
+              aria-label={
+                design.guide ? "Compare 3D guide and design" : "Compare original and design"
+              }
               onChange={(e) => setSplit(Number(e.target.value))}
             />
-            <span className="tag left">Before</span>
+            <span className="tag left">{design.guide ? "3D guide" : "Before"}</span>
             <span className="tag right">After</span>
           </>
         ) : active ? (
@@ -186,7 +195,37 @@ export function StudioStage({ state }: { state: StudioState }) {
         {shown === "design" && active?.inferred && (
           <span className="tag right">AI finish · Includes inferred areas</span>
         )}
+        {shown === "design" && active?.guide && (
+          <span className="tag right">3D-guided · Estimated geometry</span>
+        )}
       </div>
+      {active?.guide && (
+        <details className="design-guide-evidence">
+          <summary>3D guide and source evidence</summary>
+          <div>
+            <a href={assetUrl(active.guide.key)} target="_blank" rel="noreferrer">
+              <img src={assetUrl(active.guide.key)} alt="Saved 3D camera guide" />
+            </a>
+            <p>
+              Guided by AI layout {active.guide.resultId}. Geometry and unseen areas are estimates.{" "}
+              {active.guide.photoIds.length} original photos supplied appearance evidence;{" "}
+              {active.guide.assetIds.length} selected references. Style: {active.guide.style}.
+            </p>
+            <p>
+              Brief:{" "}
+              {active.prompt || "Create a cohesive, comfortable, thoughtfully furnished interior."}
+            </p>
+            <a
+              className="link-button"
+              href={assetUrl(active.guide.layoutKey)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Inspect saved architectural constraints
+            </a>
+          </div>
+        </details>
+      )}
       {active?.plan && (
         <details className="plan">
           <summary>Layout plan</summary>

@@ -10,10 +10,12 @@ import {
   load,
   save,
   ownerPrefix,
+  remove,
 } from "./storage.server";
 import { designInput, buildPrompt } from "./validation";
 import { outputSize } from "./image-size";
 import { analyzeLayout } from "./layout.server";
+import { assertCurrentGuide, prepareRoomGuide } from "./room-guide.server";
 
 import type { z } from "zod";
 function mediaType(key: string) {
@@ -33,11 +35,15 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
   const refs = input.assetIds
     .map((id) => room.assets.find((a) => a.id === id && a.kind !== "room"))
     .filter((a) => !!a);
+  if (refs.length !== input.assetIds.length)
+    throw new Response("Choose references from this room.", { status: 400 });
   const previous = input.previousDesignId
     ? room.designs.find((d) => d.id === input.previousDesignId)
     : undefined;
   if (input.previousDesignId && !previous) throw new Error("Previous design not found.");
-  const ordered = [base, ...context, ...refs];
+  const guide = input.roomGuide ? await prepareRoomGuide(owner, room, input.roomGuide) : undefined;
+  const originalPhotos = guide ? guide.photos : [base, ...context];
+  const ordered = [...originalPhotos, ...refs];
   const images = await Promise.all(
     ordered.map(async (a) => {
       const b = await load(a.key);
@@ -45,6 +51,7 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
       return b;
     }),
   );
+  if (guide) images.unshift(guide.image);
   const count = input.count ?? 1;
   const ttl = count > 1 ? 480_000 : 300_000;
   if (!claimGeneration(u.sub, ttl))
@@ -54,6 +61,7 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
     await mutateRooms(u.sub, (latest) => {
       const target = latest.find((r) => r.id === room.id);
       if (!target) throw new Error("Room was removed before generation started.");
+      if (input.roomGuide) assertCurrentGuide(target, input.roomGuide.resultId);
       target.notes = input.notes;
       target.style = input.style;
       target.measurements = input.measurements;
@@ -64,31 +72,36 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
     throw error;
   }
   void settleGeneration(u.sub, job.id, async () => {
-    if (!(await rooms(u.sub)).some((r) => r.id === room.id))
-      throw new Error("Room was removed before generation started.");
-    const plan = await analyzeLayout({
-      mode: input.mode ?? "redesign",
-      baseImage: images[0],
-      mediaType: mediaType(base.key),
-      roomType: room.type === "Other" ? "room" : room.type.toLowerCase(),
-      references: refs.map((r) => ({ name: r.name, kind: r.kind, dimensions: r.dimensions })),
-      measurements: input.measurements,
-      style: input.style,
-      brief: input.notes,
-    });
+    const current = (await rooms(u.sub)).find((r) => r.id === room.id);
+    if (!current) throw new Error("Room was removed before generation started.");
+    if (input.roomGuide) assertCurrentGuide(current, input.roomGuide.resultId);
+    const plan = guide
+      ? null
+      : await analyzeLayout({
+          mode: input.mode ?? "redesign",
+          baseImage: images[0],
+          mediaType: mediaType(base.key),
+          roomType: room.type === "Other" ? "room" : room.type.toLowerCase(),
+          references: refs.map((r) => ({ name: r.name, kind: r.kind, dimensions: r.dimensions })),
+          measurements: input.measurements,
+          style: input.style,
+          brief: input.notes,
+        });
     let prompt = buildPrompt(
       room.type === "Other" ? "a room" : `a ${room.type.toLowerCase()}`,
       input,
       refs,
-      context.length + 1,
+      originalPhotos.length + (guide ? 1 : 0),
       plan || undefined,
+      guide?.constraints,
     );
     if (previous) {
       const bytes = await load(previous.key);
-      if (bytes) {
-        images.push(bytes);
-        prompt += ` The final image is the previous design. Refine that design using the client brief, while keeping image 1 as the architectural authority.`;
-      }
+      if (!bytes) throw new Error("The previous design image is missing. Choose another design.");
+      images.push(bytes);
+      prompt += guide
+        ? " The final image is the previous design. Use it for design continuity only; image 1 remains the chosen camera/layout guide and the original room photos remain appearance evidence."
+        : ` The final image is the previous design. Refine that design using the client brief, while keeping image 1 as the architectural authority.`;
     }
     if (input.fillGaps) {
       prompt +=
@@ -116,17 +129,43 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
         plan: plan || undefined,
         mode: input.mode,
         inferred: input.fillGaps || undefined,
+        guide: guide && {
+          ...guide.constraints.capture,
+          key: `${ownerPrefix(u.sub)}${room.id}/${id}-guide.jpeg`,
+          layoutKey: `${ownerPrefix(u.sub)}${room.id}/${id}-layout.json`,
+          photoIds: originalPhotos.map((photo) => photo.id),
+          assetIds: refs.map((ref) => ref.id),
+          previousDesignId: previous?.id,
+          style: input.style,
+          measurements: input.measurements,
+          people: input.people,
+          lighting: input.lighting,
+        },
       };
     });
-    for (const [index, design] of designs.entries())
-      await save(design.key, produced[index].uint8Array, "image/png");
-    const target = await mutateRooms(u.sub, (latest) => {
-      const target = latest.find((r) => r.id === room.id);
-      if (!target) throw new Error("Room was removed during generation.");
-      target.designs.unshift(...designs);
-      return target;
-    });
-    return target.designs[0].id;
+    try {
+      for (const [index, design] of designs.entries()) {
+        await save(design.key, produced[index].uint8Array, "image/png");
+        if (design.guide && guide) {
+          await save(design.guide.key, guide.image, "image/jpeg");
+          await save(design.guide.layoutKey, guide.snapshot, "application/json");
+        }
+      }
+      const target = await mutateRooms(u.sub, (latest) => {
+        const target = latest.find((r) => r.id === room.id);
+        if (!target) throw new Error("Room was removed during generation.");
+        target.designs.unshift(...designs);
+        return target;
+      });
+      return target.designs[0].id;
+    } catch (error) {
+      for (const design of designs) {
+        for (const key of [design.key, design.guide?.key, design.guide?.layoutKey]) {
+          if (key) remove(key);
+        }
+      }
+      throw error;
+    }
   }).catch((error) => console.error("Could not settle generation job", error));
   return { jobId: job.id };
 }

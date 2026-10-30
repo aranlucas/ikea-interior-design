@@ -1289,3 +1289,62 @@ img {
 .room-types .button {
   height: 44px;
 }
+
+.room-guide-capture {
+  margin: 0 20px 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--sunken);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.room-guide-capture h3 {
+  font-size: 14px;
+  font-weight: 650;
+}
+.room-guide-capture .room-help {
+  margin: 4px 0 0;
+}
+.room-guide-capture figure {
+  margin: 0;
+}
+.room-guide-capture figure img {
+  display: block;
+  width: min(100%, 380px);
+  max-height: 230px;
+  object-fit: contain;
+  object-position: left;
+  border-radius: 6px;
+}
+.room-guide-capture figcaption {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.design-guide-evidence {
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.design-guide-evidence summary {
+  cursor: pointer;
+  padding: 12px 0;
+  color: var(--ink);
+}
+.design-guide-evidence > div {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+.design-guide-evidence img {
+  width: min(100%, 380px);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+/* Keep capture and generated landscape framing aligned on desktop and mobile. */
+.ai-layout-viewport {
+  height: auto;
+  aspect-ratio: 3 / 2;
+}

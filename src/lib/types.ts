@@ -1,3 +1,4 @@
+import type { RoomGuide } from "./room-guide";
 export type Asset = {
   id: string;
   name: string;
@@ -18,6 +19,17 @@ export type Design = {
   mode?: string;
   starred?: boolean;
   inferred?: boolean;
+  guide?: Omit<RoomGuide, "image"> & {
+    key: string;
+    layoutKey: string;
+    photoIds: string[];
+    assetIds: string[];
+    previousDesignId?: string;
+    style: string;
+    measurements: string;
+    people: string;
+    lighting: string;
+  };
 };
 export type RoomSurface = "back" | "right" | "front" | "left";
 export type RoomModel = {

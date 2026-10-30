@@ -35,7 +35,13 @@ export default function RoomPreview({ state }: { state: StudioState }) {
         </span>
       </div>
       {aiResult ? (
-        <AiRoomLayoutScene layout={aiResult} />
+        <AiRoomLayoutScene
+          key={result!.id}
+          layout={aiResult}
+          resultId={result!.id}
+          disabled={state.locked || busy || !!outdated || !state.session?.generationConfigured}
+          onGenerate={(roomGuide) => void state.generate({ roomGuide })}
+        />
       ) : scene.data ? (
         <ReconstructedRoomScene data={scene.data} photos={state.photos} />
       ) : (
@@ -210,7 +216,7 @@ export default function RoomPreview({ state }: { state: StudioState }) {
           />
         )}
       </div>
-      {(result || job?.status === "failed") && (
+      {!aiResult && (result || job?.status === "failed") && (
         <div className="room-ai-finish">
           <div>
             <h3>Fill visual gaps with AI</h3>

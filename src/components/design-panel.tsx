@@ -160,10 +160,15 @@ export function DesignPanel({ state }: { state: StudioState }) {
             "Refine"
           ) : count > 1 ? (
             `Generate ${count}`
+          ) : state.shown === "room" ? (
+            "Generate from photo"
           ) : (
             "Generate image"
           )}
         </button>
+        {state.shown === "room" && base && (
+          <p className="hint">For the 3D camera angle, capture a view in the room preview.</p>
+        )}
         {!session.generationConfigured ? (
           <p className="hint">Image generation isn’t configured. The 3D room works without AI.</p>
         ) : (

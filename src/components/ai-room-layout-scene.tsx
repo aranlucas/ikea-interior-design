@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Minus, Plus, RotateCcw } from "lucide-react";
+import { Camera, Minus, Plus, RotateCcw, Sparkles } from "lucide-react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { AiRoomLayout } from "../lib/ai-room-layout";
 import { createAiRoomGroup } from "../lib/ai-room-layout-geometry";
+import type { RoomGuide } from "../lib/room-guide";
 
 type View = {
   scene: THREE.Scene;
@@ -11,8 +12,19 @@ type View = {
   controls: OrbitControls;
   render: () => void;
   fit: (top?: boolean) => void;
+  capture: () => Pick<RoomGuide, "image" | "camera">;
 };
-export function AiRoomLayoutScene({ layout }: { layout: AiRoomLayout }) {
+export function AiRoomLayoutScene({
+  layout,
+  resultId,
+  disabled,
+  onGenerate,
+}: {
+  layout: AiRoomLayout;
+  resultId: string;
+  disabled: boolean;
+  onGenerate: (guide: RoomGuide) => void;
+}) {
   const host = useRef<HTMLDivElement>(null),
     view = useRef<View | null>(null),
     latest = useRef(layout);
@@ -20,6 +32,7 @@ export function AiRoomLayoutScene({ layout }: { layout: AiRoomLayout }) {
   const [inferred, setInferred] = useState(true),
     [fixtures, setFixtures] = useState(true),
     [error, setError] = useState("");
+  const [captured, setCaptured] = useState<RoomGuide>();
   useEffect(() => {
     const element = host.current!;
     let renderer: THREE.WebGLRenderer;
@@ -98,7 +111,32 @@ export function AiRoomLayoutScene({ layout }: { layout: AiRoomLayout }) {
     renderer.domElement.addEventListener("webglcontextlost", lost);
     const observer = new ResizeObserver(resize);
     observer.observe(element);
-    view.current = { scene, camera, controls, render, fit };
+    function capture() {
+      const size = renderer.getSize(new THREE.Vector2());
+      const pixelRatio = renderer.getPixelRatio();
+      // Match the chosen framing. Render synchronously before reading the drawing buffer.
+      const width = Math.round(1536 * Math.min(1, camera.aspect));
+      const height = Math.round(width / camera.aspect);
+      try {
+        renderer.setPixelRatio(1);
+        renderer.setSize(width, height, false);
+        render();
+        return {
+          image: renderer.domElement.toDataURL("image/jpeg", 0.92),
+          camera: {
+            position: camera.position.toArray() as [number, number, number],
+            target: controls.target.toArray() as [number, number, number],
+            fov: camera.fov,
+            aspect: camera.aspect,
+          },
+        };
+      } finally {
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(size.x, size.y, false);
+        render();
+      }
+    }
+    view.current = { scene, camera, controls, render, fit, capture };
     resize();
     return () => {
       view.current = null;
@@ -229,6 +267,57 @@ export function AiRoomLayoutScene({ layout }: { layout: AiRoomLayout }) {
           Show fixtures
         </label>
         <span className="room-help">Amber surfaces are inferred.</span>
+      </div>
+      <div className="room-guide-capture">
+        <div>
+          <h3>Design from this angle</h3>
+          <p className="room-help">
+            Orbit and zoom, then capture a clean view. AI uses its camera and layout, your original
+            photos for appearance, and your brief and selected references.
+          </p>
+        </div>
+        {captured && (
+          <figure>
+            <img src={captured.image} alt="Captured 3D view for image generation" />
+            <figcaption>Captured view · AI-estimated geometry</figcaption>
+          </figure>
+        )}
+        <div className="room-build-actions">
+          <button
+            className="button"
+            disabled={disabled || !!error}
+            onClick={() => {
+              try {
+                const image = view.current?.capture();
+                if (image)
+                  setCaptured({
+                    ...image,
+                    resultId,
+                    showInferred: inferred,
+                    showFixtures: fixtures,
+                  });
+              } catch {
+                setError("Could not capture this view. Reload and try again.");
+              }
+            }}
+          >
+            <Camera size={15} /> {captured ? "Retake view" : "Capture this view"}
+          </button>
+          {captured && (
+            <button
+              className="button primary"
+              disabled={disabled || !!error}
+              onClick={() => onGenerate(captured)}
+            >
+              <Sparkles size={15} /> Generate this view
+            </button>
+          )}
+        </div>
+        {captured && (
+          <p className="room-help">
+            Generation uses the captured view above. Retake after changing the camera or visibility.
+          </p>
+        )}
       </div>
       <div className="ai-layout-explanation">
         <p>{layout.summary}</p>
