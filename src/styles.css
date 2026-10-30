@@ -354,6 +354,26 @@ img {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+.room-size-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.room-size-fields legend {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.room-size-fields legend em {
+  font-style: normal;
+  font-weight: 450;
+  color: var(--ink-3);
+  margin-left: 6px;
+}
+.room-size-fields .field-row > * {
+  min-width: 0;
+}
 .field-head {
   display: flex;
   align-items: center;
