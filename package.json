@@ -16,6 +16,8 @@
     "@varlock/bitwarden-plugin": "latest",
     "@varlock/vite-integration": "^1.5.5",
     "ai": "7.0.157",
+    "cheerio": "^1.2.0",
+    "ipaddr.js": "^2.5.0",
     "jose": "latest",
     "lucide-react": "latest",
     "nitro": "3.0.261029-rc",
