@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { exampleAiRoomLayout } from "./ai-room-layout.fixture";
-import { designInput } from "./validation";
+import { buildPrompt, designInput } from "./validation";
 import type { Room, Asset } from "./types";
 
 const directory = mkdtempSync(join(tmpdir(), "roomform-guide-"));
@@ -146,6 +146,13 @@ it("sends the actual 3D image first through the installed SDK, then ordered sour
     "previous design",
     "inferred",
     "Do not mirror",
+    "Preserve its furniture identities, quantities, materials, physical proportions, and relative placement",
+    "not several",
+    "Client-confirmed physical size: 100 × 40 × 80 cm",
+    "do not duplicate",
+    "not its background or camera",
+    "Do not return an eye-level interior photograph",
+    "room silhouette",
   ])
     expect(prompt).toContain(text);
   expect(prompt).toContain(JSON.stringify(exampleAiRoomLayout()));
@@ -293,4 +300,47 @@ it("allows a retained layout after a failed rebuild and leaves no guide objects 
   expect((await s.rooms(owner))[0].designs).toHaveLength(before);
   expect(s.claimGeneration(owner)).toBe(true);
   s.releaseGeneration(owner);
+});
+
+it("separates product identity, style inspiration, and estimated placement without treating empty mode as furnishing", async () => {
+  const { input } = await fixture();
+  const constraints = {
+    layout: exampleAiRoomLayout(),
+    capture: input.roomGuide!,
+  };
+  const refs = [
+    { name: "Oak table", kind: "product", dimensions: "100 × 40 × 80 cm" },
+    { name: "Warm minimal room", kind: "inspiration" },
+  ];
+  for (const mode of ["redesign", "stage", "sketch"] as const) {
+    const prompt = buildPrompt("a bedroom", { ...input, mode }, refs, 3, undefined, constraints);
+    expect(prompt).toContain("Image 4: product, Oak table.");
+    expect(prompt).not.toContain("Return only a polished interior photograph");
+    expect(prompt).toContain("Final camera check:");
+    expect(prompt).toContain("Client-confirmed physical size: 100 × 40 × 80 cm");
+    expect(prompt).toContain("Image 5: inspiration, Warm minimal room.");
+    expect(prompt).toContain("Inspiration references supply palette, mood, and styling only");
+    expect(prompt).toContain("Client-confirmed product dimensions override estimated box sizes");
+    expect(prompt).toContain("A replacement occupies the replaced item's location and orientation");
+    expect(prompt).toContain("Never shrink, stretch, crop away, or push furniture through walls");
+    expect(prompt).toContain("showFixtures=false hides boxes for inspection");
+    expect(prompt.indexOf("Before returning, visually check")).toBeGreaterThan(
+      prompt.indexOf("Style direction:"),
+    );
+  }
+  const empty = buildPrompt(
+    "a bedroom",
+    { ...input, mode: "empty" },
+    refs,
+    3,
+    undefined,
+    constraints,
+  );
+  expect(empty).toContain("remove movable furnishings, retain permanent fixtures");
+  expect(empty).not.toContain("Return only a polished photograph");
+  expect(empty).toContain("Final camera check:");
+  expect(empty).toContain("Remove movable furniture even when it appears as a box");
+  expect(empty).not.toContain("Product references specify the exact furniture identity");
+  expect(empty).not.toContain("Furniture placement rules:");
+  expect(empty).not.toContain("Before returning, visually check each requested product");
 });

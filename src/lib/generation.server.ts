@@ -100,7 +100,7 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
       if (!bytes) throw new Error("The previous design image is missing. Choose another design.");
       images.push(bytes);
       prompt += guide
-        ? " The final image is the previous design. Use it for design continuity only; image 1 remains the chosen camera/layout guide and the original room photos remain appearance evidence."
+        ? " The final image is the previous design. Preserve its furniture identities, quantities, materials, physical proportions, and relative placement unless the client brief explicitly requests a change. Carry those choices into the chosen camera rather than copying the previous image's screen coordinates. Image 1 remains the chosen camera/layout guide and the original room photos remain appearance evidence. In empty mode, remove movable furnishings regardless of the previous design."
         : ` The final image is the previous design. Refine that design using the client brief, while keeping image 1 as the architectural authority.`;
     }
     if (input.fillGaps) {
