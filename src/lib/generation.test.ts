@@ -49,10 +49,14 @@ it("persists a paid result after POST returns, scopes status, and releases the l
   await expect(
     startGeneration(owner, { roomId, baseId, notes: "", style: "", assetIds: [] }),
   ).rejects.toThrow("already");
+  await s.mutateRooms(owner, (all) => {
+    all[0].notes = "Edited while generating";
+  });
   complete({ image: { uint8Array: new Uint8Array([1, 2]) } });
   await vi.waitFor(() => expect(s.getJob(owner, jobId)?.status).toBe("succeeded"));
   const job = s.getJob(owner, jobId)!;
   expect((await s.rooms(owner))[0].designs[0].id).toBe(job.designId);
+  expect((await s.rooms(owner))[0].notes).toBe("Edited while generating");
   expect(s.claimGeneration(owner)).toBe(true);
   s.releaseGeneration(owner);
   vi.mocked(generateImage).mockRejectedValueOnce(new Error("Provider failed"));
@@ -72,9 +76,16 @@ it("recovers interrupted jobs and leases when a new server opens the database", 
   const s = await import("./storage.server");
   expect(s.claimGeneration("restart")).toBe(true);
   const job = s.createJob("restart", crypto.randomUUID());
+  const done = s.createJob("completed", crypto.randomUUID());
+  s.finishJob("someone-else", done.id, { error: "Wrong owner" });
+  expect(s.getJob("completed", done.id)?.status).toBe("running");
+  s.finishJob("completed", done.id, { designId: "finished-design" });
+  s.finishJob("completed", done.id, { error: "Late failure" });
+  expect(s.getJob("completed", done.id)?.status).toBe("succeeded");
   vi.resetModules();
   const restarted = await import("./storage.server");
   expect(restarted.getJob("restart", job.id)?.status).toBe("failed");
   expect(restarted.getJob("restart", job.id)?.error).toContain("restart");
   expect(restarted.claimGeneration("restart")).toBe(true);
+  expect(restarted.getJob("completed", done.id)?.status).toBe("succeeded");
 });
