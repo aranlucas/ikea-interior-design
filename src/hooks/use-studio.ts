@@ -46,7 +46,7 @@ export function useStudio(roomId: string) {
     () => room?.assets.filter((a) => a.kind !== "room").map((a) => a.id) || [],
   );
   const [designId, setDesignId] = useState("");
-  const [view, setView] = useState<View>("design");
+  const [view, setView] = useState<View>("room");
   const [split, setSplit] = useState(50);
   const [refine, setRefine] = useState(false);
   const [mode, setMode] = useState<Mode>("redesign");
@@ -96,8 +96,8 @@ export function useStudio(roomId: string) {
   const design =
     room?.designs.find((d) => d.id === designId) ||
     room?.designs.find((d) => d.baseId === base?.id);
-  const shown = design ? view : "photo";
-  const active = shown === "photo" ? undefined : design;
+  const shown = view === "room" ? "room" : design ? view : "photo";
+  const active = shown === "design" || shown === "compare" ? design : undefined;
   const before = design && photos.find((a) => a.id === design.baseId);
   const locked = busy || starting || job?.status === "running";
   const me = session?.user;
@@ -145,7 +145,10 @@ export function useStudio(roomId: string) {
         const r = await api<Room>(studioUrls.rooms, { method: "PATCH", body: data });
         await update(r);
         if (kind !== "room") setSelected((p) => [...p, r.assets[r.assets.length - 1].id]);
-        else setBaseId((p) => p || r.assets.find((a) => a.kind === "room")?.id || "");
+        else {
+          setBaseId((p) => p || r.assets.find((a) => a.kind === "room")?.id || "");
+          if (id === currentRoom.current) setView("room");
+        }
       }
       setModal(null);
     });
@@ -300,7 +303,7 @@ export function useStudio(roomId: string) {
   const generationMutation = useMutation({
     mutationFn: (body: unknown) => api<{ jobId: string }>(studioUrls.generation, json(body)),
   });
-  async function generate() {
+  async function generate(options?: { fillGaps?: boolean }) {
     if (!room || !base) return;
     setStarting(true);
     setError("");
@@ -318,6 +321,7 @@ export function useStudio(roomId: string) {
         measurements,
         people,
         lighting,
+        fillGaps: options?.fillGaps,
       });
       watching.current = r.jobId;
       queryClient.setQueryData(generationOptions().queryKey, {

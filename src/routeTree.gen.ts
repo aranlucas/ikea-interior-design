@@ -15,6 +15,7 @@ import { Route as ApiGenerateRouteImport } from './routes/api/generate'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiImportRouteImport } from './routes/api/import'
 import { Route as ApiMediaRouteImport } from './routes/api/media'
+import { Route as ApiReconstructRouteImport } from './routes/api/reconstruct'
 import { Route as ApiRoomsRouteImport } from './routes/api/rooms'
 import { Route as ApiSessionRouteImport } from './routes/api/session'
 import { Route as RoomsIndexRouteImport } from './routes/rooms.index'
@@ -51,6 +52,11 @@ const ApiMediaRoute = ApiMediaRouteImport.update({
   path: '/api/media',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiReconstructRoute = ApiReconstructRouteImport.update({
+  id: '/api/reconstruct',
+  path: '/api/reconstruct',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiRoomsRoute = ApiRoomsRouteImport.update({
   id: '/api/rooms',
   path: '/api/rooms',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/api/health': typeof ApiHealthRoute
   '/api/import': typeof ApiImportRoute
   '/api/media': typeof ApiMediaRoute
+  '/api/reconstruct': typeof ApiReconstructRoute
   '/api/rooms': typeof ApiRoomsRoute
   '/api/session': typeof ApiSessionRoute
   '/rooms/$roomId': typeof RoomsRoomIdRoute
@@ -96,6 +103,7 @@ export interface FileRoutesByTo {
   '/api/health': typeof ApiHealthRoute
   '/api/import': typeof ApiImportRoute
   '/api/media': typeof ApiMediaRoute
+  '/api/reconstruct': typeof ApiReconstructRoute
   '/api/rooms': typeof ApiRoomsRoute
   '/api/session': typeof ApiSessionRoute
   '/rooms/$roomId': typeof RoomsRoomIdRoute
@@ -110,6 +118,7 @@ export interface FileRoutesById {
   '/api/health': typeof ApiHealthRoute
   '/api/import': typeof ApiImportRoute
   '/api/media': typeof ApiMediaRoute
+  '/api/reconstruct': typeof ApiReconstructRoute
   '/api/rooms': typeof ApiRoomsRoute
   '/api/session': typeof ApiSessionRoute
   '/rooms/$roomId': typeof RoomsRoomIdRoute
@@ -125,6 +134,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/import'
     | '/api/media'
+    | '/api/reconstruct'
     | '/api/rooms'
     | '/api/session'
     | '/rooms/$roomId'
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/import'
     | '/api/media'
+    | '/api/reconstruct'
     | '/api/rooms'
     | '/api/session'
     | '/rooms/$roomId'
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/import'
     | '/api/media'
+    | '/api/reconstruct'
     | '/api/rooms'
     | '/api/session'
     | '/rooms/$roomId'
@@ -164,6 +176,7 @@ export interface RootRouteChildren {
   ApiHealthRoute: typeof ApiHealthRoute
   ApiImportRoute: typeof ApiImportRoute
   ApiMediaRoute: typeof ApiMediaRoute
+  ApiReconstructRoute: typeof ApiReconstructRoute
   ApiRoomsRoute: typeof ApiRoomsRoute
   ApiSessionRoute: typeof ApiSessionRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -211,6 +224,13 @@ declare module '@tanstack/react-router' {
       path: '/api/media'
       fullPath: '/api/media'
       preLoaderRoute: typeof ApiMediaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/reconstruct': {
+      id: '/api/reconstruct'
+      path: '/api/reconstruct'
+      fullPath: '/api/reconstruct'
+      preLoaderRoute: typeof ApiReconstructRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/rooms': {
@@ -270,6 +290,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiHealthRoute: ApiHealthRoute,
   ApiImportRoute: ApiImportRoute,
   ApiMediaRoute: ApiMediaRoute,
+  ApiReconstructRoute: ApiReconstructRoute,
   ApiRoomsRoute: ApiRoomsRoute,
   ApiSessionRoute: ApiSessionRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

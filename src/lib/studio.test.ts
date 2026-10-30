@@ -244,6 +244,48 @@ describe("room names", () => {
 });
 
 describe("room updates and design deletion", () => {
+  it("saves room geometry without AI and rejects wall photos outside the room", async () => {
+    const s = await import("./storage.server");
+    const { updateRoom } = await import("./room-actions.server");
+    const owner = "room-model-editor";
+    const id = crypto.randomUUID();
+    const photoId = crypto.randomUUID();
+    const productId = crypto.randomUUID();
+    await s.saveRooms(owner, [
+      {
+        id,
+        name: "Measured room",
+        type: "Living room",
+        notes: "Keep the floor",
+        style: "Japandi",
+        assets: [
+          { id: photoId, key: "photo.jpg", kind: "room", name: "Back" },
+          { id: productId, key: "chair.jpg", kind: "product", name: "Chair" },
+        ],
+        designs: [],
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    const model = { width: 5.2, depth: 3.6, height: 2.5, walls: { back: photoId } };
+    await expect(updateRoom("other", { roomId: id, model })).rejects.toMatchObject({ status: 404 });
+    await updateRoom(owner, { roomId: id, model });
+    expect((await s.rooms(owner))[0]).toMatchObject({
+      model,
+      notes: "Keep the floor",
+      style: "Japandi",
+      designs: [],
+    });
+    for (const badId of [productId, crypto.randomUUID()]) {
+      await expect(
+        updateRoom(owner, { roomId: id, model: { ...model, walls: { back: badId } } }),
+      ).rejects.toMatchObject({ status: 400 });
+    }
+    expect((await s.rooms(owner))[0].model).toEqual(model);
+    await expect(
+      updateRoom(owner, { roomId: id, model: { ...model, width: 0 } }),
+    ).rejects.toThrow();
+    expect((await s.rooms(owner))[0].model).toEqual(model);
+  });
   it("validates names and draft fields, preserves other fields, and checks ownership", async () => {
     const s = await import("./storage.server");
     const { updateRoom } = await import("./room-actions.server");

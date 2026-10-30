@@ -90,6 +90,10 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
         prompt += ` The final image is the previous design. Refine that design using the client brief, while keeping image 1 as the architectural authority.`;
       }
     }
+    if (input.fillGaps) {
+      prompt +=
+        " This is an optional AI finish of a partial photo reconstruction. Keep architecture and contents visible in the original photos consistent across views. Fill visual gaps conservatively without claiming inferred areas were observed or measured. This output does not add measured geometry to the 3D reconstruction.";
+    }
     const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const result = await generateImage({
       model: provider.image(process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-sunburst"),
@@ -111,6 +115,7 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
         baseId: base.id,
         plan: plan || undefined,
         mode: input.mode,
+        inferred: input.fillGaps || undefined,
       };
     });
     for (const [index, design] of designs.entries())

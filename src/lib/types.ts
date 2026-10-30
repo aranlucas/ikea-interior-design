@@ -17,6 +17,37 @@ export type Design = {
   plan?: string;
   mode?: string;
   starred?: boolean;
+  inferred?: boolean;
+};
+export type RoomSurface = "back" | "right" | "front" | "left";
+export type RoomModel = {
+  width: number;
+  depth: number;
+  height: number;
+  walls: Partial<Record<RoomSurface, string>>;
+};
+export type ReconstructionResult = {
+  id: string;
+  key: string;
+  photoIds: string[];
+  registeredIds: string[];
+  pointCount: number;
+  components: number;
+  kind?: "sparse" | "ai-layout";
+  sourcePhotoIds?: string[];
+  model?: string;
+  fixtureCount?: number;
+};
+export type ReconstructionJob = {
+  id: string;
+  status: "running" | "succeeded" | "failed" | "cancelled";
+  stage: string;
+  error?: string;
+  photoIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  mode?: "classical" | "ai-layout";
+  result?: ReconstructionResult;
 };
 export type Room = {
   id: string;
@@ -27,6 +58,8 @@ export type Room = {
   measurements?: string;
   assets: Asset[];
   designs: Design[];
+  model?: RoomModel;
+  reconstruction?: ReconstructionJob;
   createdAt: string;
 };
 export type RoomSummary = Pick<Room, "id" | "name" | "type" | "createdAt">;

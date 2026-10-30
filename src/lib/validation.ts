@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { scaleNotes } from "./scale";
+import { roomModelInput } from "./room-model";
 export const roomInput = z.object({
   name: z.string().trim().max(100).optional(),
   type: z.string().trim().min(1).max(60).default("Living room"),
@@ -30,6 +31,7 @@ export const designInput = z.object({
   measurements: z.string().trim().max(200).default(""),
   people: z.enum(peopleOptions).default("none"),
   lighting: z.enum(lightingOptions).default("natural"),
+  fillGaps: z.boolean().optional(),
 });
 export const uuid = z.uuid();
 
@@ -102,6 +104,7 @@ export function buildPrompt(
 }
 
 export const roomUpdate = z.union([
+  z.object({ roomId: uuid, model: roomModelInput }),
   z.object({ roomId: uuid, assetId: uuid, dimensions: z.string().trim().max(200) }),
   z.object({ roomId: uuid, notes: z.string().max(4000), style: z.string().max(100) }),
   z.object({ roomId: uuid, name: z.string().trim().min(1).max(100) }),

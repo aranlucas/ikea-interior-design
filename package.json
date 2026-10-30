@@ -33,6 +33,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.91.0",
+    "three": "^0.187.0",
     "varlock": "latest",
     "zod": "^4.0.0"
   },
@@ -40,6 +41,7 @@
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "latest",
     "oxfmt": "0.75.0",
     "oxlint": "1.90.0",

@@ -9,6 +9,12 @@ export async function updateRoom(owner: string, value: unknown) {
       const design = room.designs.find((d) => d.id === input.designId);
       if (!design) throw new Response("Design not found", { status: 404 });
       design.starred = input.starred;
+    } else if ("model" in input) {
+      for (const id of Object.values(input.model.walls)) {
+        if (id && !room.assets.some((a) => a.id === id && a.kind === "room"))
+          throw new Response("Choose a room photo from this room for each wall.", { status: 400 });
+      }
+      room.model = input.model;
     } else if ("assetId" in input) {
       const asset = room.assets.find((a) => a.id === input.assetId && a.kind !== "room");
       if (!asset) throw new Response("Reference not found", { status: 404 });
