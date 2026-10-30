@@ -5,7 +5,7 @@ import { useStudioData } from "../lib/studio-data";
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useRoomDrafts } from "./use-room-drafts";
 import type { Room, Asset, GenerationJob } from "../lib/types";
-import { api, json, compress, type Session, type View } from "../lib/studio-client";
+import { api, json, compress, type Session, type View, type Mode } from "../lib/studio-client";
 export function useStudio() {
   const { rooms, update, change } = useStudioData();
   const queryClient = useQueryClient();
@@ -45,6 +45,9 @@ export function useStudio() {
   const [view, setView] = useState<View>("design");
   const [split, setSplit] = useState(50);
   const [refine, setRefine] = useState(false);
+  const [mode, setMode] = useState<Mode>("redesign");
+  const [measurements, setMeasurements] = useState("");
+  const [count, setCount] = useState<1 | 2 | 4>(1);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const room = all.find((r) => r.id === roomId);
@@ -83,6 +86,8 @@ export function useStudio() {
     setSelectionRoom(roomId);
     setBaseId(room?.assets.find((a) => a.kind === "room")?.id || "");
     setSelected(room?.assets.filter((a) => a.kind !== "room").map((a) => a.id) || []);
+    setMeasurements(room?.measurements || "");
+    setMode("redesign");
     setDesignId("");
     setView("design");
     setRefine(false);
@@ -313,6 +318,9 @@ export function useStudio() {
         style,
         assetIds: selected,
         previousDesignId: refine ? active?.id : undefined,
+        mode,
+        count,
+        measurements,
       });
       watching.current = r.jobId;
       queryClient.setQueryData(["generation"], {
@@ -373,6 +381,12 @@ export function useStudio() {
     setSplit,
     refine,
     setRefine,
+    mode,
+    setMode,
+    measurements,
+    setMeasurements,
+    count,
+    setCount,
     dragging,
     setDragging,
     input,

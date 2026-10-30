@@ -8,13 +8,22 @@ export type Asset = {
   dimensions?: string;
   availableSizes?: string[];
 };
-export type Design = { id: string; key: string; prompt: string; createdAt: string; baseId: string };
+export type Design = {
+  id: string;
+  key: string;
+  prompt: string;
+  createdAt: string;
+  baseId: string;
+  plan?: string;
+  mode?: string;
+};
 export type Room = {
   id: string;
   name: string;
   type: string;
   notes: string;
   style: string;
+  measurements?: string;
   assets: Asset[];
   designs: Design[];
   createdAt: string;

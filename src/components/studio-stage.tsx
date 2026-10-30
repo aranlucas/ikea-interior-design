@@ -18,6 +18,7 @@ export function StudioStage({ state }: { state: StudioState }) {
     active,
     before,
     locked,
+    count,
     drop,
   } = state;
   const room = state.room!;
@@ -106,10 +107,20 @@ export function StudioStage({ state }: { state: StudioState }) {
           <div className="overlay">
             <LoaderCircle className="spin" size={22} />
             <p>Generating…</p>
-            <small>This can take a few minutes.</small>
+            <small>
+              {count > 1
+                ? `${count} designs — this can take a few minutes.`
+                : "This can take a few minutes."}
+            </small>
           </div>
         )}
       </div>
+      {active?.plan && (
+        <details className="plan">
+          <summary>Layout plan</summary>
+          <p>{active.plan}</p>
+        </details>
+      )}
       <Filmstrips state={state} />
     </section>
   );

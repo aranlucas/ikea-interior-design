@@ -70,14 +70,14 @@ export async function mutateRooms<T>(sub: string, mutate: (all: Room[]) => T): P
     throw e;
   }
 }
-export function claimGeneration(sub: string) {
+export function claimGeneration(sub: string, ttl = 300_000) {
   const now = Date.now();
   return (
     db()
       .prepare(
         "INSERT INTO generation_leases (owner,expires) VALUES (?,?) ON CONFLICT(owner) DO UPDATE SET expires=excluded.expires WHERE generation_leases.expires < ?",
       )
-      .run(sub, now + 300_000, now).changes > 0
+      .run(sub, now + ttl, now).changes > 0
   );
 }
 export function releaseGeneration(sub: string) {

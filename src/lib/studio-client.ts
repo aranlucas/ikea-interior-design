@@ -30,15 +30,35 @@ export const styles = [
   "Japandi",
   "Mid-century modern",
   "Organic modern",
+  "Minimalist",
+  "Modern",
+  "Industrial",
+  "Bohemian",
+  "Art Deco",
+  "Coastal",
   "Eclectic",
 ];
 export const roomTypes = [
   "Living room",
   "Bedroom",
   "Dining room",
-  "Home office",
   "Kitchen",
+  "Home office",
+  "Bathroom",
+  "Kids room",
+  "Hallway",
+  "Outdoor",
   "Other",
+];
+export type Mode = "redesign" | "stage" | "empty";
+export const modes: { id: Mode; label: string; hint: string }[] = [
+  {
+    id: "redesign",
+    label: "Redesign",
+    hint: "Keep the room's architecture; restyle and refurnish it.",
+  },
+  { id: "stage", label: "Stage", hint: "Fill an empty or bare room using your references." },
+  { id: "empty", label: "Empty", hint: "Remove all furniture and decor, keep the architecture." },
 ];
 export const accept = "image/jpeg,image/png,image/webp";
 

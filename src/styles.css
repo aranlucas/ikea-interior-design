@@ -535,6 +535,27 @@ img {
   font-size: 12px;
   color: var(--ink-3);
 }
+.plan {
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 8px 12px;
+}
+.plan summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.plan[open] summary {
+  margin-bottom: 6px;
+}
+.plan p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
 .strips {
   display: flex;
   gap: 24px;
