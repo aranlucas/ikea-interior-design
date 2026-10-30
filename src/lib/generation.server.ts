@@ -57,6 +57,12 @@ export async function startGeneration(owner: string, input: z.infer<typeof desig
     throw new Error("A design is already being generated. Please wait for it to finish.");
   let job;
   try {
+    await mutateRooms(u.sub, (latest) => {
+      const target = latest.find((r) => r.id === room.id);
+      if (!target) throw new Error("Room was removed before generation started.");
+      target.notes = input.notes;
+      target.style = input.style;
+    });
     job = createJob(u.sub, room.id);
   } catch (error) {
     releaseGeneration(u.sub);
@@ -80,8 +86,6 @@ export async function startGeneration(owner: string, input: z.infer<typeof desig
     const target = await mutateRooms(u.sub, (latest) => {
       const target = latest.find((r) => r.id === room.id);
       if (!target) throw new Error("Room was removed during generation.");
-      target.notes = input.notes;
-      target.style = input.style;
       target.designs.unshift({
         id,
         key,

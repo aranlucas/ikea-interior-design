@@ -9,8 +9,8 @@ import {
   deleteRoom,
 } from "../../lib/storage.server";
 import { handle } from "../../lib/http.server";
-import { z } from "zod";
-import { roomInput, roomName, uuid } from "../../lib/validation";
+import { updateRoom, deleteDesign } from "../../lib/room-actions.server";
+import { roomInput, roomName, roomDelete, uuid } from "../../lib/validation";
 import type { Asset, Room } from "../../lib/types";
 export const Route = createFileRoute("/api/rooms")({
   server: {
@@ -90,24 +90,15 @@ export const Route = createFileRoute("/api/rooms")({
         handle(async () => {
           sameOrigin(request);
           const u = await requireUser(request);
-          const input = z
-            .object({ roomId: z.uuid(), assetId: z.uuid(), dimensions: z.string().trim().max(200) })
-            .parse(await request.json());
-          const room = await mutateRooms(u.sub, (all) => {
-            const room = all.find((r) => r.id === input.roomId);
-            const asset = room?.assets.find((a) => a.id === input.assetId && a.kind !== "room");
-            if (!room || !asset) throw new Response("Reference not found", { status: 404 });
-            asset.dimensions = input.dimensions;
-            return room;
-          });
+          const room = await updateRoom(u.sub, await request.json());
           return Response.json(room);
         }),
       DELETE: ({ request }) =>
         handle(async () => {
           sameOrigin(request);
           const u = await requireUser(request);
-          const { roomId, assetId } = await request.json();
-          uuid.parse(roomId);
+          const { roomId, assetId, designId } = roomDelete.parse(await request.json());
+          if (designId) return Response.json(await deleteDesign(u.sub, roomId, designId));
           if (assetId === undefined) {
             if (!(await deleteRoom(u.sub, roomId)))
               throw new Response("Room not found", { status: 404 });

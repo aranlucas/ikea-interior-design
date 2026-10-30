@@ -37,7 +37,7 @@ export async function load(key: string): Promise<Uint8Array | null> {
   const row = db().prepare("SELECT data FROM objects WHERE key=?").get(key);
   return (row?.data as Uint8Array) || null;
 }
-export async function remove(key: string) {
+export function remove(key: string) {
   db().prepare("DELETE FROM objects WHERE key=?").run(key);
 }
 export async function rooms(sub: string): Promise<Room[]> {
