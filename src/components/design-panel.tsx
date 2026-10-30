@@ -1,4 +1,5 @@
 import { ChevronDown, LoaderCircle } from "lucide-react";
+import { RoomSizeFields } from "./room-size-fields";
 import { ReferencesList } from "./references-list";
 import {
   styles,
@@ -95,17 +96,12 @@ export function DesignPanel({ state }: { state: StudioState }) {
             </div>
           </label>
         </div>
-        <label className="field">
-          <span>
-            Room size <em>optional — anchors product scale</em>
-          </span>
-          <input
-            value={measurements}
-            maxLength={200}
-            onChange={(e) => setMeasurements(e.target.value)}
-            placeholder="e.g. 4.2 × 3.6 m, ceiling 2.6 m"
-          />
-        </label>
+        <RoomSizeFields
+          key={state.roomId}
+          value={measurements}
+          onChange={setMeasurements}
+          disabled={locked}
+        />
         <label className="field">
           <span>Brief</span>
           <textarea
