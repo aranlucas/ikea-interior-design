@@ -73,6 +73,52 @@ describe("private studio", () => {
     expect(p).toContain("Preserve its architecture");
     expect(p).toContain("Add the sofa");
   });
+
+  it("switches directives per design mode", () => {
+    const base = {
+      roomId: crypto.randomUUID(),
+      baseId: crypto.randomUUID(),
+      notes: "",
+      style: "Japandi",
+      assetIds: [],
+    };
+    expect(buildPrompt("Living room", designInput.parse(base), [], 1)).toContain(
+      "Preserve its architecture",
+    );
+    expect(
+      buildPrompt("Living room", designInput.parse({ ...base, mode: "stage" }), [], 1),
+    ).toContain("virtually stage it");
+    expect(
+      buildPrompt("Living room", designInput.parse({ ...base, mode: "empty" }), [], 1),
+    ).toContain("Empty the space");
+    expect(designInput.parse({ ...base, count: 4 }).count).toBe(4);
+    expect(designInput.parse({ ...base }).mode).toBe("redesign");
+    expect(() => designInput.parse({ ...base, mode: "fly" })).toThrow();
+  });
+
+  it("anchors scale with room measurements, size guidance and the layout plan", () => {
+    const input = designInput.parse({
+      roomId: crypto.randomUUID(),
+      baseId: crypto.randomUUID(),
+      notes: "",
+      style: "Japandi",
+      assetIds: [],
+      measurements: "4.2 × 3.6 m, ceiling 2.6 m",
+    });
+    const p = buildPrompt(
+      "Living room",
+      input,
+      [{ name: "Sofa", kind: "product", dimensions: "211 × 88 × 83 cm" }],
+      1,
+      "Estimated room geometry: back wall ~420 cm.",
+    );
+    expect(p).toContain("physical scale authority");
+    expect(p).toContain("4.2 × 3.6 m, ceiling 2.6 m");
+    expect(p).toContain("Sofa: 211 cm wide × 88 cm deep × 83 cm high");
+    expect(p).toContain("about 50% of its width");
+    expect(p).toContain("Estimated room geometry: back wall ~420 cm.");
+    expect(p).toContain("Image pixel dimensions are not physical measurements");
+  });
 });
 
 describe("Better Auth browser handoff", () => {

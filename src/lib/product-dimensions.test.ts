@@ -47,7 +47,7 @@ describe("physical product sizes", () => {
       [{ name: "Print", kind: "product", dimensions: "18 × 24 inches" }],
       1,
     );
-    expect(prompt).toContain("Physical product size: 18 × 24 inches");
+    expect(prompt).toContain("Print: 46 cm wide × 61 cm deep");
     expect(prompt).toContain("wall is 120 inches wide");
     expect(prompt).toContain("Image pixel dimensions are not physical measurements");
   });
