@@ -1,100 +1,33 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateImage } from "ai";
 import { requireUser, sameOrigin } from "../../lib/auth.server";
-import {
-  rooms,
-  mutateRooms,
-  claimGeneration,
-  releaseGeneration,
-  load,
-  save,
-  ownerPrefix,
-} from "../../lib/storage.server";
-import { designInput, buildPrompt } from "../../lib/validation";
+import { getJob, rooms } from "../../lib/storage.server";
+import { startGeneration } from "../../lib/generation.server";
+import { designInput, uuid } from "../../lib/validation";
 import { handle } from "../../lib/http.server";
-import { outputSize } from "../../lib/image-size";
 export const Route = createFileRoute("/api/generate")({
   server: {
     handlers: {
       POST: ({ request }) =>
         handle(async () => {
           sameOrigin(request);
-          const u = await requireUser(request);
+          const user = await requireUser(request);
           const input = designInput.parse(await request.json());
-          if (!process.env.OPENAI_API_KEY)
-            throw new Error("Add OPENAI_API_KEY to the server environment to generate a design.");
-          const all = await rooms(u.sub);
-          const room = all.find((r) => r.id === input.roomId);
-          if (!room) return new Response("Room not found", { status: 404 });
-          const base = room.assets.find((a) => a.id === input.baseId && a.kind === "room");
-          if (!base) throw new Error("Choose a room photo as your base view.");
-          const context = room.assets
-            .filter((a) => a.kind === "room" && a.id !== base.id)
-            .slice(0, 3);
-          const refs = input.assetIds
-            .map((id) => room.assets.find((a) => a.id === id && a.kind !== "room"))
-            .filter((a) => !!a);
-          const previous = input.previousDesignId
-            ? room.designs.find((d) => d.id === input.previousDesignId)
-            : undefined;
-          if (input.previousDesignId && !previous) throw new Error("Previous design not found.");
-          const ordered = [base, ...context, ...refs];
-          const images = await Promise.all(
-            ordered.map(async (a) => {
-              const b = await load(a.key);
-              if (!b) throw new Error("A reference image is missing. Please upload it again.");
-              return b;
-            }),
+          return Response.json(await startGeneration(user.sub, input), { status: 202 });
+        }),
+      GET: ({ request }) =>
+        handle(async () => {
+          const user = await requireUser(request);
+          const value = new URL(request.url).searchParams.get("jobId");
+          const job = getJob(user.sub, value === null ? undefined : uuid.parse(value));
+          if (value && !job) return new Response("Job not found", { status: 404 });
+          const room =
+            job?.status === "succeeded"
+              ? (await rooms(user.sub)).find((r) => r.id === job.roomId)
+              : undefined;
+          return Response.json(
+            { job: job || null, room },
+            { headers: { "Cache-Control": "no-store" } },
           );
-          let prompt = buildPrompt(
-            room.type === "Other" ? "a room" : `a ${room.type.toLowerCase()}`,
-            input,
-            refs,
-            context.length + 1,
-          );
-          if (previous) {
-            const bytes = await load(previous.key);
-            if (bytes) {
-              images.push(bytes);
-              prompt += ` The final image is the previous design. Refine that design using the client brief, while keeping image 1 as the architectural authority.`;
-            }
-          }
-          if (!claimGeneration(u.sub))
-            throw new Error("A design is already being generated. Please wait for it to finish.");
-          try {
-            if (!(await rooms(u.sub)).some((r) => r.id === room.id))
-              throw new Error("Room was removed before generation started.");
-            const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
-            const result = await generateImage({
-              model: provider.image(process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-sunburst"),
-              prompt: { text: prompt, images },
-              size: outputSize(images[0]),
-              n: 1,
-              maxRetries: 0,
-              abortSignal: AbortSignal.timeout(240_000),
-            });
-            const id = crypto.randomUUID();
-            const key = `${ownerPrefix(u.sub)}${room.id}/${id}.png`;
-            await save(key, result.image.uint8Array, "image/png");
-            const target = await mutateRooms(u.sub, (latest) => {
-              const target = latest.find((r) => r.id === room.id);
-              if (!target) throw new Error("Room was removed during generation.");
-              target.notes = input.notes;
-              target.style = input.style;
-              target.designs.unshift({
-                id,
-                key,
-                prompt: input.notes,
-                createdAt: new Date().toISOString(),
-                baseId: base.id,
-              });
-              return target;
-            });
-            return Response.json(target);
-          } finally {
-            releaseGeneration(u.sub);
-          }
         }),
     },
   },

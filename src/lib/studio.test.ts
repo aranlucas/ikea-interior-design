@@ -162,3 +162,83 @@ describe("room names", () => {
     expect(roomName("Living room", ["Living room", "Living room 2"])).toBe("Living room 3");
   });
 });
+
+describe("room updates and design deletion", () => {
+  it("validates names and draft fields, preserves other fields, and checks ownership", async () => {
+    const s = await import("./storage.server");
+    const { updateRoom } = await import("./room-actions.server");
+    const owner = "room-editor";
+    const id = crypto.randomUUID();
+    const assetId = crypto.randomUUID();
+    await s.saveRooms(owner, [
+      {
+        id,
+        name: "Living room",
+        type: "Living room",
+        notes: "",
+        style: "Japandi",
+        assets: [
+          { id: assetId, key: s.ownerPrefix(owner) + "ref.jpeg", name: "Chair", kind: "product" },
+        ],
+        designs: [],
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    await expect(updateRoom("someone-else", { roomId: id, name: "Wrong" })).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(updateRoom(owner, { roomId: id, name: "   " })).rejects.toThrow();
+    await expect(updateRoom(owner, { roomId: id, name: "x".repeat(101) })).rejects.toThrow();
+    await expect(
+      updateRoom(owner, { roomId: id, notes: "x".repeat(4001), style: "" }),
+    ).rejects.toThrow();
+    await updateRoom(owner, { roomId: id, name: "  Den  " });
+    await updateRoom(owner, { roomId: id, notes: "Keep the floor", style: "Scandinavian" });
+    const result = await updateRoom(owner, { roomId: id, assetId, dimensions: " 80 cm " });
+    expect(result).toMatchObject({ name: "Den", notes: "Keep the floor", style: "Scandinavian" });
+    expect(result.assets[0].dimensions).toBe("80 cm");
+  });
+  it("removes only the owner's selected design and blob", async () => {
+    const s = await import("./storage.server");
+    const { deleteDesign } = await import("./room-actions.server");
+    const owner = "design-deleter";
+    const id = crypto.randomUUID();
+    const designId = crypto.randomUUID();
+    const keepId = crypto.randomUUID();
+    const key = s.ownerPrefix(owner) + id + "/" + designId + ".png";
+    const keepKey = s.ownerPrefix(owner) + id + "/" + keepId + ".png";
+    const otherKey = s.ownerPrefix("other") + id + "/" + designId + ".png";
+    const design = {
+      id: designId,
+      key,
+      prompt: "",
+      baseId: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
+    await s.saveRooms(owner, [
+      {
+        id,
+        name: "Room",
+        type: "Living",
+        notes: "",
+        style: "",
+        assets: [],
+        designs: [design, { ...design, id: keepId, key: keepKey }],
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    for (const item of [key, keepKey, otherKey])
+      await s.save(item, new Uint8Array([1]), "image/png");
+    await expect(deleteDesign("other", id, designId)).rejects.toMatchObject({ status: 404 });
+    await expect(deleteDesign(owner, crypto.randomUUID(), designId)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(await s.load(key)).not.toBeNull();
+    const result = await deleteDesign(owner, id, designId);
+    expect(result.designs.map((d) => d.id)).toEqual([keepId]);
+    expect(await s.load(key)).toBeNull();
+    expect(await s.load(keepKey)).not.toBeNull();
+    expect(await s.load(otherKey)).not.toBeNull();
+    await expect(deleteDesign(owner, id, designId)).rejects.toMatchObject({ status: 404 });
+  });
+});
