@@ -20,7 +20,7 @@ export const Route = createFileRoute("/api/media")({
           return new Response(Buffer.from(bytes), {
             headers: {
               "Content-Type": `image/${key.split(".").pop()}`,
-              "Cache-Control": "private, no-store",
+              "Cache-Control": "private, max-age=31536000, immutable",
               "X-Content-Type-Options": "nosniff",
             },
           });

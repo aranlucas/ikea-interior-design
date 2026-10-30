@@ -21,3 +21,14 @@ export type Room = {
 };
 export type User = { sub: string; name: string; email?: string };
 export const assetUrl = (key: string) => `/api/media?key=${encodeURIComponent(key)}`;
+
+export type GenerationJob = {
+  id: string;
+  owner: string;
+  roomId: string;
+  status: "running" | "succeeded" | "failed";
+  error: string | null;
+  designId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
