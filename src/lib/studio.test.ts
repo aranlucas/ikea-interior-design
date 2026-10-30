@@ -18,3 +18,14 @@ describe('Better Auth browser handoff',()=>{
  it('opens the signed sign-in page supplied by the provider JSON response',async()=>{const fetchMock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(Response.json({redirect:true,url:'/auth/sign-in?sig=provider-signed'}));try{expect(await authorizationRedirect(new URL('https://auth.example/api/auth/oauth2/authorize'))).toBe('https://auth.example/auth/sign-in?sig=provider-signed')}finally{fetchMock.mockRestore()}})
  it('rejects external destinations from the authorization response',async()=>{const fetchMock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(Response.json({redirect:true,url:'https://untrusted.example/auth/sign-in'}));try{await expect(authorizationRedirect(new URL('https://auth.example/api/auth/oauth2/authorize'))).rejects.toThrow('unexpected login destination')}finally{fetchMock.mockRestore()}})
 })
+
+describe('room deletion',()=>{
+ it('deletes the room and all its media while preserving other rooms and users',async()=>{
+  const s=await import('./storage.server');const owner='room-deletion-owner';const other='room-deletion-other';const id=crypto.randomUUID();const keepId=crypto.randomUUID();const prefix=`${s.ownerPrefix(owner)}${id}/`;const keepKey=`${s.ownerPrefix(owner)}${keepId}/keep.png`;const otherKey=`${s.ownerPrefix(other)}${id}/photo.png`;
+  const room={id,name:'Delete this room',type:'Living room',notes:'',style:'Japandi',assets:[],designs:[],createdAt:new Date().toISOString()};await s.saveRooms(owner,[room,{...room,id:keepId,name:'Keep this room'}]);await s.saveRooms(other,[room]);
+  for(const key of [prefix+'photo.png',prefix+'design.png',prefix+'unlisted-reference.png',keepKey,otherKey])await s.save(key,new Uint8Array([1]),'image/png');
+  expect(await s.deleteRoom('unrelated-owner',id)).toBe(false);expect(await s.load(prefix+'photo.png')).not.toBeNull();
+  expect(s.claimGeneration(owner)).toBe(true);await expect(s.deleteRoom(owner,id)).rejects.toMatchObject({status:409});expect((await s.rooms(owner)).length).toBe(2);s.releaseGeneration(owner);
+  expect(await s.deleteRoom(owner,id)).toBe(true);expect((await s.rooms(owner)).map(r=>r.id)).toEqual([keepId]);for(const key of [prefix+'photo.png',prefix+'design.png',prefix+'unlisted-reference.png'])expect(await s.load(key)).toBeNull();expect(await s.load(keepKey)).not.toBeNull();expect(await s.load(otherKey)).not.toBeNull();expect((await s.rooms(other)).map(r=>r.id)).toEqual([id]);
+ })
+})
