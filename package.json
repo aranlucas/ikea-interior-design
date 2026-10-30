@@ -8,7 +8,7 @@
     "start": "varlock run -- node .output/server/index.mjs",
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "dev:local": "ROOMFORM_LOCAL=1 vite --host 0.0.0.0 --port 3000",
+    "dev:local": "ROOMFORM_LOCAL=1 vite --host 127.0.0.1 --port 3000",
     "lint": "oxlint",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check"
