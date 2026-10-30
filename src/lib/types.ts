@@ -16,6 +16,7 @@ export type Design = {
   baseId: string;
   plan?: string;
   mode?: string;
+  starred?: boolean;
 };
 export type Room = {
   id: string;

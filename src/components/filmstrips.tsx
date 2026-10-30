@@ -1,4 +1,5 @@
-import { Plus, X } from "lucide-react";
+import { useState } from "react";
+import { Plus, Star, X } from "lucide-react";
 import { assetUrl } from "../lib/types";
 import { accept } from "../lib/studio-client";
 import { Strip } from "./studio-controls";
@@ -21,6 +22,10 @@ export function Filmstrips({ state }: { state: StudioState }) {
     upload,
   } = state;
   const room = state.room!;
+  const [savedOnly, setSavedOnly] = useState(false);
+  const starredCount = room.designs.filter((d) => d.starred).length;
+  if (savedOnly && starredCount === 0) setSavedOnly(false);
+  const designs = savedOnly ? room.designs.filter((d) => d.starred) : room.designs;
   return (
     <div className="strips">
       <Strip label="Photos">
@@ -64,14 +69,27 @@ export function Filmstrips({ state }: { state: StudioState }) {
         </button>
       </Strip>
       {room.designs.length > 0 && (
-        <Strip label="Designs">
-          {room.designs.map((d, i) => (
+        <Strip
+          label={savedOnly ? "Saved" : "Designs"}
+          action={
+            starredCount > 0 || savedOnly ? (
+              <button
+                className="link-button"
+                aria-pressed={savedOnly}
+                onClick={() => setSavedOnly((v) => !v)}
+              >
+                {savedOnly ? "Show all" : `Saved ${starredCount}`}
+              </button>
+            ) : undefined
+          }
+        >
+          {designs.map((d, i) => (
             <div className="thumb-wrap" key={d.id}>
               <button
                 className="thumb"
                 aria-pressed={active?.id === d.id}
                 disabled={generating}
-                aria-label={`Show design ${room.designs.length - i}`}
+                aria-label={`Show design ${designs.length - i}`}
                 title={new Date(d.createdAt).toLocaleString()}
                 onClick={() => {
                   setDesignId(d.id);
@@ -81,10 +99,15 @@ export function Filmstrips({ state }: { state: StudioState }) {
               >
                 <img src={assetUrl(d.key)} alt="" />
               </button>
+              {d.starred && (
+                <span className="thumb-star" aria-label="Saved design">
+                  <Star size={11} />
+                </span>
+              )}
               <button
                 className="thumb-delete"
                 disabled={locked}
-                aria-label={`Delete design ${room.designs.length - i}`}
+                aria-label={`Delete design ${designs.length - i}`}
                 title="Delete design"
                 onClick={() => void deleteDesign(d.id)}
               >

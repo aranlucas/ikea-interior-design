@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildPrompt, designInput, roomName } from "./validation";
+import { buildPrompt, designInput, roomName, roomUpdate } from "./validation";
 import { seal, unseal, user, authorizationRedirect } from "./auth.server";
 const dir = mkdtempSync(join(tmpdir(), "roomform-"));
 beforeAll(() => {
@@ -118,6 +118,40 @@ describe("private studio", () => {
     expect(p).toContain("about 50% of its width");
     expect(p).toContain("Estimated room geometry: back wall ~420 cm.");
     expect(p).toContain("Image pixel dimensions are not physical measurements");
+  });
+
+  it("adds sketch rendering, people, and lighting to the prompt", () => {
+    const base = {
+      roomId: crypto.randomUUID(),
+      baseId: crypto.randomUUID(),
+      notes: "",
+      style: "Japandi",
+      assetIds: [],
+    };
+    const defaults = designInput.parse(base);
+    expect(defaults.people).toBe("none");
+    expect(defaults.lighting).toBe("natural");
+    const scene = buildPrompt(
+      "Living room",
+      designInput.parse({ ...base, people: "couple", lighting: "cozy lamps" }),
+      [],
+      1,
+    );
+    expect(scene).toContain("Naturally include a couple");
+    expect(scene).toContain("Lighting direction: cozy lamps");
+    const plain = buildPrompt("Living room", defaults, [], 1);
+    expect(plain).not.toContain("Naturally include");
+    expect(plain).not.toContain("Lighting direction");
+    expect(buildPrompt("Study", designInput.parse({ ...base, mode: "sketch" }), [], 1)).toContain(
+      "sketch, drawing, or 3D-software screenshot",
+    );
+    expect(
+      roomUpdate.parse({
+        roomId: crypto.randomUUID(),
+        designId: crypto.randomUUID(),
+        starred: true,
+      }),
+    ).toMatchObject({ starred: true });
   });
 });
 

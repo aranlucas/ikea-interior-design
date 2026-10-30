@@ -1,4 +1,5 @@
 import type { User } from "./types";
+import { designModes, peopleOptions, lightingOptions } from "./validation";
 export type Session = {
   user: User | null;
   local: boolean;
@@ -50,7 +51,9 @@ export const roomTypes = [
   "Outdoor",
   "Other",
 ];
-export type Mode = "redesign" | "stage" | "empty";
+export type Mode = (typeof designModes)[number];
+export type People = (typeof peopleOptions)[number];
+export type Lighting = (typeof lightingOptions)[number];
 export const modes: { id: Mode; label: string; hint: string }[] = [
   {
     id: "redesign",
@@ -59,7 +62,15 @@ export const modes: { id: Mode; label: string; hint: string }[] = [
   },
   { id: "stage", label: "Stage", hint: "Fill an empty or bare room using your references." },
   { id: "empty", label: "Empty", hint: "Remove all furniture and decor, keep the architecture." },
+  {
+    id: "sketch",
+    label: "Sketch",
+    hint: "Render a sketch or 3D screenshot into a photorealistic room.",
+  },
 ];
+const capitalize = (value: string) => value[0].toUpperCase() + value.slice(1);
+export const peopleChoices = peopleOptions.map((id) => ({ id, label: capitalize(id) }));
+export const lightingChoices = lightingOptions.map((id) => ({ id, label: capitalize(id) }));
 export const accept = "image/jpeg,image/png,image/webp";
 
 export async function compress(file: File) {
