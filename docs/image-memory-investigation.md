@@ -1,0 +1,74 @@
+# Image generation memory investigation — 2026-10-31
+
+## What is established
+
+- Railway reported an out-of-memory crash at 04:24 UTC for deployment
+  `584f6058-e9c5-4af7-8e10-522afac7f0d0`, commit `8037557`. A 30-second memory
+  sample reached 499,937,280 bytes, essentially the configured 500 MB ceiling.
+- A generation request was accepted at 04:23:17; the server was listening again
+  at 04:24:58. The logs do **not** record the returned image size or allocation
+  phase. A preceding generic Studio error does not establish its cause.
+- Main `14c48a7b112df8496f1b0dc0685dddc4b9eeb127` only changes Amazon image
+  extraction relative to that deployment. The generation path is unchanged.
+- `ai@7.0.157` lazily decodes a generated file's `uint8Array` using
+  `atob` followed by `Uint8Array.from(string, mapper)`. This creates large
+  transient JavaScript allocations and caches both base64 and decoded bytes.
+  Roomform used this getter for every generated image, then copied it again
+  with `Buffer.from(data)` before binding to SQLite.
+
+## Offline reproduction
+
+Run with the lockfile's dependencies and Node 24:
+
+```sh
+node scripts/profile-image-memory.mjs sdk 1
+node scripts/profile-image-memory.mjs native 1
+node scripts/profile-image-memory.mjs native 8
+```
+
+The script constructs a valid, deterministic 3840×2160 PNG (11,078,340 bytes).
+A fresh worker processes a locally streamed mock OpenAI JSON response through
+the installed SDK and writes the image bytes to temporary SQLite. All fetches
+are mocked; no credentials, provider charges, production data, or network calls
+are involved. Fixture construction is excluded from the worker's peak RSS.
+
+Observed on Node 24.22.1, Linux; decimal MB, not MiB:
+
+| Path                                      | Images | Peak process RSS |
+| ----------------------------------------- | -----: | ---------------: |
+| Existing SDK getter + copied SQLite bind  |      1 |         547.6 MB |
+| Native base64 decode + direct binary bind |      1 |         172.7 MB |
+| Native base64 decode + direct binary bind |      8 |         493.3 MB |
+
+This reproduces an allocation mechanism sufficient to exceed the production
+limit for one plausible-sized 4K PNG. It is a **strong candidate**, not proof
+that the incident returned this size of image or failed at this exact phase.
+The harness is not the complete application and does not include input photos,
+other requests, or a production-equivalent memory baseline.
+
+## Focused fix
+
+- Decode the SDK's base64 result with Node's native `Buffer.from(..., "base64")`,
+  avoiding the string iterator and SDK decoded-image cache.
+- Bind binary data directly to SQLite; preserve UTF-8 conversion for strings.
+- Remove a redundant copy in the separate brush-edit result path.
+- Regression tests reject access to the expensive getter, verify exact saved
+  single/batch/edit bytes, and cover SQLite subarray and snapshot semantics.
+
+No model, image quality, output size, batch count, retry, timeout, or provider
+request behavior changes.
+
+## Remaining capacity risks
+
+This is not a guarantee that every workload fits in 500 MB. An eight-image
+response alone nearly reaches that ceiling in the reduced harness. The SDK
+buffers the full JSON response and its base64 strings. Per-user leases also
+allow different users to generate concurrently, and input images are loaded
+before admission. Media responses make additional full-image copies.
+
+Recommended separate decision: adopt a bounded batch/concurrency policy after
+testing realistic input-photo and concurrent-request loads. Serial one-image
+provider calls can reduce response memory, but may change latency, input-token
+charges, partial-result handling, and retry behavior; this patch deliberately
+does not introduce that product/billing change silently. Until that policy is
+settled, do not describe large multi-image batches as proven safe at 500 MB.

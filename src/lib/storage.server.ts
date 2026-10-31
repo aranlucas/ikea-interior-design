@@ -32,7 +32,8 @@ export async function save(key: string, data: Uint8Array | string, contentType: 
     .prepare(
       "INSERT INTO objects (key,data,content_type) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data,content_type=excluded.content_type",
     )
-    .run(key, Buffer.from(data), contentType);
+    // SQLite copies the bound bytes synchronously; avoid another full image copy here.
+    .run(key, typeof data === "string" ? Buffer.from(data) : data, contentType);
 }
 export async function load(key: string): Promise<Uint8Array | null> {
   const row = db().prepare("SELECT data FROM objects WHERE key=?").get(key);
