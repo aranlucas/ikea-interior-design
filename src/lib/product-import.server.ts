@@ -4,9 +4,10 @@ import { extractProductDimensions, shopifySize } from "./product-dimensions";
 import { fetchPublic, publicUrl } from "./public-fetch.server";
 export function extractPageReference(html: string, pageUrl: URL) {
   const $ = load(html);
-  const amazon = /(^|\.)amazon\.(com|ca|co\.uk|de|fr|it|es|co\.jp|com\.au|in)$/.test(
-    pageUrl.hostname,
-  );
+  const amazon =
+    /(^|\.)amazon\.(com|ca|co\.uk|de|fr|it|es|co\.jp|com\.au|in|com\.br|com\.mx|nl|se|pl|ie|com\.be|eg|sg|sa|com\.tr|ae|cn)$/.test(
+      pageUrl.hostname,
+    );
   if (
     amazon &&
     ($('#captchacharacters, form[action*="validateCaptcha"]').length ||
