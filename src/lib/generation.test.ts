@@ -52,11 +52,23 @@ it("persists a paid result after POST returns, scopes status, and releases the l
   await s.mutateRooms(owner, (all) => {
     all[0].notes = "Edited while generating";
   });
-  complete({ image: { uint8Array: new Uint8Array([1, 2]) } });
+  expect(vi.mocked(generateImage).mock.calls[0][0]).toMatchObject({
+    size: "3840x2160",
+    providerOptions: { openai: { quality: "max", outputFormat: "png" } },
+    maxRetries: 0,
+  });
+  complete({ image: { uint8Array: new Uint8Array([1, 2]) }, usage: { outputTokens: 13000 } });
   await vi.waitFor(() => expect(s.getJob(owner, jobId)?.status).toBe("succeeded"));
   const job = s.getJob(owner, jobId)!;
   expect((await s.rooms(owner))[0].designs[0].id).toBe(job.designId);
   expect((await s.rooms(owner))[0].notes).toBe("Edited while generating");
+  expect((await s.rooms(owner))[0].designs[0].generation).toMatchObject({
+    model: "gpt-image-2.5-sunburst",
+    quality: "max",
+    size: "3840x2160",
+    outputTokens: 13000,
+    outputCostUsd: 0.39,
+  });
   expect(s.claimGeneration(owner)).toBe(true);
   s.releaseGeneration(owner);
   vi.mocked(generateImage).mockRejectedValueOnce(new Error("Provider failed"));
@@ -264,4 +276,54 @@ it("ignores the base photo in freestyle mode", async () => {
   expect(call.size).toBe("1024x1536");
   expect(call.prompt.images).toHaveLength(0);
   s.releaseGeneration(owner);
+});
+
+it("keeps all variations without duplicating request-level token charges on each design", async () => {
+  const s = await import("./storage.server");
+  const { startGeneration } = await import("./generation.server");
+  const owner = "variations-settings";
+  const roomId = crypto.randomUUID();
+  await s.saveRooms(owner, [
+    {
+      id: roomId,
+      name: "Garden",
+      type: "Garden",
+      notes: "",
+      style: "Tropical",
+      assets: [],
+      designs: [],
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  vi.mocked(generateImage).mockResolvedValueOnce({
+    images: Array.from({ length: 4 }, (_, i) => ({ uint8Array: new Uint8Array([i]) })),
+    usage: { outputTokens: 52000 },
+  } as never);
+  const imageSettings = { quality: "high", size: "photo" } as const;
+  const { jobId } = await startGeneration(owner, {
+    roomId,
+    notes: "",
+    style: "Tropical",
+    assetIds: [],
+    mode: "freestyle",
+    orientation: "square",
+    count: 4,
+    imageSettings,
+  });
+  await vi.waitFor(() => expect(s.getJob(owner, jobId)?.status).toBe("succeeded"));
+  const room = (await s.rooms(owner))[0];
+  expect(room.imageSettings).toEqual(imageSettings);
+  expect(room.designs).toHaveLength(4);
+  expect(new Set(room.designs.map((design) => design.key)).size).toBe(4);
+  expect(vi.mocked(generateImage).mock.calls.at(-1)![0]).toMatchObject({
+    n: 4,
+    size: "1024x1024",
+    providerOptions: { openai: { quality: "high" } },
+  });
+  for (const design of room.designs) {
+    expect(design.generation).toMatchObject({ quality: "high", size: "1024x1024" });
+    expect(design.generation?.outputTokens).toBeUndefined();
+    expect(design.generation?.outputCostUsd).toBeUndefined();
+    expect(await s.load(design.key)).toBeDefined();
+  }
 });

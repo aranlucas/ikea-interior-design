@@ -1,3 +1,4 @@
+import { ENV } from "varlock/env";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { requireUser, sameOrigin } from "../../lib/auth.server";
@@ -33,7 +34,7 @@ export const Route = createFileRoute("/api/reconstruct")({
             {
               room,
               available: await reconstructionEngineAvailable(),
-              aiAvailable: !!process.env.OPENAI_API_KEY,
+              aiAvailable: !!ENV.OPENAI_API_KEY,
             },
             { headers: { "Cache-Control": "no-store" } },
           );

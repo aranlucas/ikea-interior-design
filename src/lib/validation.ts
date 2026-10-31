@@ -1,3 +1,4 @@
+import { imageSettings } from "./image-settings";
 import { z } from "zod";
 import { scaleNotes } from "./scale";
 import { roomModelInput } from "./room-model";
@@ -45,6 +46,7 @@ export const designInput = z.object({
   lighting: z.enum(lightingOptions).default("natural"),
   fillGaps: z.boolean().optional(),
   roomGuide: roomGuideInput.optional(),
+  imageSettings: imageSettings.optional(),
 });
 export const uuid = z.uuid();
 export const editInput = z.object({
@@ -179,7 +181,12 @@ export function buildPrompt(
 export const roomUpdate = z.union([
   z.object({ roomId: uuid, model: roomModelInput }),
   z.object({ roomId: uuid, assetId: uuid, dimensions: z.string().trim().max(200) }),
-  z.object({ roomId: uuid, notes: z.string().max(4000), style: z.string().max(100) }),
+  z.object({
+    roomId: uuid,
+    notes: z.string().max(4000),
+    style: z.string().max(100),
+    imageSettings: imageSettings.optional(),
+  }),
   z.object({ roomId: uuid, name: z.string().trim().min(1).max(100) }),
   z.object({ roomId: uuid, designId: uuid, starred: z.boolean() }),
 ]);

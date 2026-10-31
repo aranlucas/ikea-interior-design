@@ -1,3 +1,5 @@
+import { ENV } from "varlock/env";
+import { defaultImageModel } from "./image-settings";
 import { user, devBypass } from "./auth.server";
 import { rooms } from "./storage.server";
 
@@ -7,8 +9,9 @@ export async function readStudio(request: Request) {
     session: {
       user: identity,
       local: devBypass(),
-      authConfigured: !!process.env.AUTH_CLIENT_ID,
-      generationConfigured: !!process.env.OPENAI_API_KEY,
+      authConfigured: !!ENV.AUTH_CLIENT_ID,
+      generationConfigured: !!ENV.OPENAI_API_KEY,
+      imageModel: ENV.OPENAI_IMAGE_MODEL || defaultImageModel,
     },
     rooms: identity ? (await rooms(identity.sub)).map(roomSummary) : [],
   };

@@ -12,6 +12,7 @@ import {
   type Orientation,
 } from "../lib/studio-client";
 import type { StudioState } from "../hooks/use-studio";
+import { ImageSettings } from "./image-settings";
 export function DesignPanel({ state }: { state: StudioState }) {
   const {
     generating,
@@ -37,10 +38,11 @@ export function DesignPanel({ state }: { state: StudioState }) {
     generate,
   } = state;
   const session = state.session!;
+  const failed = state.job?.roomId === state.roomId && state.job.status === "failed";
   const freestyle = mode === "freestyle";
   const canGenerate = !!base || freestyle;
   return (
-    <aside className="panel">
+    <aside className="panel" aria-label="Design brief and image settings">
       <div className="panel-body">
         <div className="field">
           <div className="field-head">
@@ -142,6 +144,17 @@ export function DesignPanel({ state }: { state: StudioState }) {
           />
         </label>
         <ReferencesList state={state} />
+        <ImageSettings
+          value={state.imageSettings}
+          onChange={state.setImageSettings}
+          model={session.imageModel}
+          sizeNote={
+            freestyle
+              ? "Output size follows the orientation above: 1536 × 1024 landscape, 1024 × 1536 portrait, or 1024 × 1024 square."
+              : undefined
+          }
+          disabled={generating}
+        />
       </div>
       <div className="panel-foot">
         {saveStatus && (
@@ -173,6 +186,11 @@ export function DesignPanel({ state }: { state: StudioState }) {
             ))}
           </div>
         </div>
+        {failed && !generating && (
+          <p className="generation-error" role="status">
+            {state.job?.error}
+          </p>
+        )}
         <button
           className="button primary block"
           disabled={!canGenerate || locked || !session.generationConfigured}
@@ -182,6 +200,8 @@ export function DesignPanel({ state }: { state: StudioState }) {
             <>
               <LoaderCircle size={16} className="spin" /> Generating…
             </>
+          ) : failed ? (
+            "Try again"
           ) : refine ? (
             "Refine"
           ) : count > 1 ? (

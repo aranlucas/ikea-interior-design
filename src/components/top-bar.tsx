@@ -34,7 +34,12 @@ export function TopBar({ state }: { state: StudioState }) {
         </button>
       )}
       {signed && all.length > 0 && (
-        <button className="button ghost" disabled={busy} onClick={() => setModal("room")}>
+        <button
+          className="button ghost"
+          aria-label="New room"
+          disabled={busy}
+          onClick={() => setModal("room")}
+        >
           <Plus size={15} />
           <span className="hide-sm">New room</span>
         </button>

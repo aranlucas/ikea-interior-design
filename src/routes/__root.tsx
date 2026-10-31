@@ -1,3 +1,4 @@
+import icon from "../../assets/icon.svg?url";
 import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import css from "../styles.css?url";
 import type { QueryClient } from "@tanstack/react-query";
@@ -12,7 +13,10 @@ export const Route = createRootRouteWithContext<{
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Roomform" },
     ],
-    links: [{ rel: "stylesheet", href: css }],
+    links: [
+      { rel: "stylesheet", href: css },
+      { rel: "icon", type: "image/svg+xml", href: icon },
+    ],
   }),
   component: () => (
     <html lang="en">

@@ -6,9 +6,10 @@
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
     "start": "varlock run -- node .output/server/index.mjs",
+    "secrets:store": "varlock keychain set BITWARDEN_ACCESS_TOKEN --project roomform --profile local --force",
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "dev:local": "ROOMFORM_LOCAL=1 vite --host 127.0.0.1 --port 3000",
+    "dev:local": "ROOMFORM_LOCAL=true vite --host 127.0.0.1 --port 3000",
     "lint": "oxlint",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check"

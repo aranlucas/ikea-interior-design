@@ -6,7 +6,7 @@
   --line-strong: #d6d4cf;
   --ink: #1c1b19;
   --ink-2: #57554f;
-  --ink-3: #8c8a84;
+  --ink-3: #716f69;
   --accent: #0058a3;
   --accent-soft: #e6eef7;
   --danger: #c4352b;
@@ -347,7 +347,7 @@ img {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .field ::placeholder {
-  color: #aaa8a2;
+  color: var(--ink-3);
 }
 .select {
   position: relative;
@@ -727,6 +727,75 @@ img {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+.panel-heading h1 {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.panel-heading p {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.image-settings {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0;
+  padding: 16px 0 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.image-settings legend {
+  padding: 0 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.image-settings .hint,
+.generation-help {
+  line-height: 1.55;
+}
+.generation-help {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.generation-help summary,
+.design-details summary {
+  cursor: pointer;
+  width: fit-content;
+  color: var(--ink-2);
+}
+.generation-help > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.model-name {
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.generation-help a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.generation-error {
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.design-details {
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.design-details p {
+  margin-top: 6px;
 }
 .panel-foot {
   padding: 14px 16px 16px;
@@ -1275,8 +1344,23 @@ img {
     overflow: visible;
   }
   .panel-foot {
-    position: static;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
     background: var(--surface);
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  .panel .select select,
+  .panel textarea {
+    font-size: 16px;
+  }
+  .panel .select select,
+  .panel-foot .button {
+    min-height: 44px;
+  }
+  .generation-help summary {
+    min-height: 44px;
+    align-content: center;
   }
   .hide-sm {
     display: none;
@@ -1286,6 +1370,11 @@ img {
   }
   .room-picker select {
     max-width: 44vw;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
   }
 }
 @media (max-width: 480px) {

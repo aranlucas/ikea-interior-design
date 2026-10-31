@@ -1,3 +1,4 @@
+import { ENV } from "varlock/env";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateImage } from "ai";
 import {
@@ -16,6 +17,8 @@ import { designInput, buildPrompt, buildEditPrompt, isOutdoor } from "./validati
 import { outputSize, orientationSize, pngDimensions } from "./image-size";
 import { analyzeLayout } from "./layout.server";
 import { assertCurrentGuide, prepareRoomGuide } from "./room-guide.server";
+import { defaultImageModel, defaultImageSettings, outputCost } from "./image-settings";
+import { generationError, retryImageRequest } from "./image-errors.server";
 
 import type { z } from "zod";
 function mediaType(key: string) {
@@ -24,7 +27,9 @@ function mediaType(key: string) {
 export async function startGeneration(owner: string, raw: z.input<typeof designInput>) {
   const input = designInput.parse(raw);
   const u = { sub: owner };
-  if (!process.env.OPENAI_API_KEY)
+  const settings = input.imageSettings ?? defaultImageSettings;
+  const model = ENV.OPENAI_IMAGE_MODEL || defaultImageModel;
+  if (!ENV.OPENAI_API_KEY)
     throw new Error("Add OPENAI_API_KEY to the server environment to generate a design.");
   const all = await rooms(u.sub);
   const room = all.find((r) => r.id === input.roomId);
@@ -71,6 +76,7 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
       target.notes = input.notes;
       target.style = input.style;
       target.measurements = input.measurements;
+      target.imageSettings = settings;
     });
     job = createJob(u.sub, room.id);
   } catch (error) {
@@ -116,20 +122,31 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
       prompt +=
         " This is an optional AI finish of a partial photo reconstruction. Keep architecture and contents visible in the original photos consistent across views. Fill visual gaps conservatively without claiming inferred areas were observed or measured. This output does not add measured geometry to the 3D reconstruction.";
     }
-    const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const result = await generateImage({
-      model: provider.image(process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-sunburst"),
-      prompt: { text: prompt, images },
-      size:
-        guide || base
-          ? outputSize(images[0])
-          : previous
-            ? outputSize(images[images.length - 1])
-            : orientationSize(input.orientation),
-      n: count,
-      maxRetries: 0,
-      abortSignal: AbortSignal.timeout(ttl - 30_000),
-    });
+    const provider = createOpenAI({ apiKey: ENV.OPENAI_API_KEY });
+    const size =
+      input.mode === "freestyle"
+        ? orientationSize(input.orientation)
+        : guide || settings.size === "photo"
+          ? guide || base
+            ? outputSize(images[0])
+            : previous
+              ? outputSize(images[images.length - 1])
+              : orientationSize(input.orientation)
+          : settings.size;
+    const signal = AbortSignal.timeout(ttl - 30_000);
+    const result = await retryImageRequest(
+      () =>
+        generateImage({
+          model: provider.image(model),
+          prompt: { text: prompt, images },
+          size,
+          providerOptions: { openai: { quality: settings.quality, outputFormat: "png" } },
+          n: count,
+          maxRetries: 0,
+          abortSignal: signal,
+        }),
+      signal,
+    );
     const produced = result.images?.length ? result.images : [result.image];
     const createdAt = new Date().toISOString();
     const designs = produced.map(() => {
@@ -143,6 +160,14 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
         plan: plan || undefined,
         mode: input.mode,
         inferred: input.fillGaps || undefined,
+        generation: {
+          model,
+          quality: settings.quality,
+          size,
+          outputTokens: produced.length === 1 ? result.usage?.outputTokens : undefined,
+          outputCostUsd:
+            produced.length === 1 ? outputCost(model, result.usage?.outputTokens) : undefined,
+        },
         guide: guide && {
           ...guide.constraints.capture,
           key: `${ownerPrefix(u.sub)}${room.id}/${id}-guide.jpeg`,
@@ -188,7 +213,7 @@ export async function startEditGeneration(
   input: { roomId: string; designId: string; prompt: string; mask: Uint8Array<ArrayBuffer> },
 ) {
   const u = { sub: owner };
-  if (!process.env.OPENAI_API_KEY)
+  if (!ENV.OPENAI_API_KEY)
     throw new Error("Add OPENAI_API_KEY to the server environment to edit a design.");
   const all = await rooms(u.sub);
   const room = all.find((r) => r.id === input.roomId);
@@ -214,14 +239,14 @@ export async function startEditGeneration(
   }
   void settleGeneration(u.sub, job.id, async () => {
     const form = new FormData();
-    form.set("model", process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-sunburst");
+    form.set("model", ENV.OPENAI_IMAGE_MODEL || "gpt-image-2.5-sunburst");
     form.set("prompt", buildEditPrompt(input.prompt));
     form.set("image", new Blob([new Uint8Array(sourceBytes)], { type }), "design.png");
     form.set("mask", new Blob([input.mask], { type: "image/png" }), "mask.png");
     form.set("n", "1");
     const response = await fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      headers: { Authorization: `Bearer ${ENV.OPENAI_API_KEY}` },
       body: form,
       signal: AbortSignal.timeout(270_000),
     });
@@ -262,7 +287,7 @@ export async function settleGeneration(owner: string, jobId: string, work: () =>
     finishJob(owner, jobId, { designId: await work() });
   } catch (error) {
     finishJob(owner, jobId, {
-      error: error instanceof Error ? error.message : "Generation failed.",
+      error: generationError(error),
     });
   } finally {
     releaseGeneration(owner);

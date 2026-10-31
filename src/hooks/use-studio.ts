@@ -45,10 +45,14 @@ export function useStudio(roomId: string) {
 
   const [baseId, setBaseId] = useState(() => room?.assets.find((a) => a.kind === "room")?.id || "");
   const [selected, setSelected] = useState<string[]>(
-    () => room?.assets.filter((a) => a.kind !== "room").map((a) => a.id) || [],
+    () =>
+      room?.assets
+        .filter((a) => a.kind !== "room")
+        .map((a) => a.id)
+        .slice(-10) || [],
   );
   const [designId, setDesignId] = useState("");
-  const [view, setView] = useState<View>("room");
+  const [view, setView] = useState<View>("photo");
   const [split, setSplit] = useState(50);
   const [refine, setRefine] = useState(false);
   const [mode, setMode] = useState<Mode>("redesign");
@@ -59,7 +63,10 @@ export function useStudio(roomId: string) {
   const [lighting, setLighting] = useState<Lighting>("natural");
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const { draftFields, getDraft, saveStatus } = useRoomDrafts(room, setError);
+  const { draftFields, getDraft, saveStatus, imageSettings, setImageSettings } = useRoomDrafts(
+    room,
+    setError,
+  );
   const jobQuery = useQuery({
     ...generationOptions(),
     enabled: !!session?.user && generationOptions().enabled,
@@ -147,10 +154,11 @@ export function useStudio(roomId: string) {
         if (dimensions) data.set("dimensions", dimensions);
         const r = await api<Room>(studioUrls.rooms, { method: "PATCH", body: data });
         await update(r);
-        if (kind !== "room") setSelected((p) => [...p, r.assets[r.assets.length - 1].id]);
+        if (kind !== "room")
+          setSelected((p) => [...p, r.assets[r.assets.length - 1].id].slice(-10));
         else {
           setBaseId((p) => p || r.assets.find((a) => a.kind === "room")?.id || "");
-          if (id === currentRoom.current) setView("room");
+          if (id === currentRoom.current) setView("photo");
         }
       }
       setModal(null);
@@ -182,7 +190,7 @@ export function useStudio(roomId: string) {
         }),
       );
       await update(r);
-      setSelected((p) => [...p, r.assets[r.assets.length - 1].id]);
+      setSelected((p) => [...p, r.assets[r.assets.length - 1].id].slice(-10));
       setModal(null);
     });
   }
@@ -345,6 +353,7 @@ export function useStudio(roomId: string) {
         lighting,
         fillGaps: options?.fillGaps,
         roomGuide: options?.roomGuide,
+        imageSettings,
       });
       await seedWatch(r.jobId);
     } catch (e) {
@@ -463,6 +472,8 @@ export function useStudio(roomId: string) {
     upload,
     reference,
     saveStatus,
+    imageSettings,
+    setImageSettings,
     renameRoom,
     deleteDesign,
     saveSize,

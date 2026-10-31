@@ -125,7 +125,9 @@ it("sends the actual 3D image first through the installed SDK, then ordered sour
     files.map(async (file) => new Uint8Array(await file.arrayBuffer())),
   );
   expect(bytes).toEqual([jpeg, ...[1, 0, 3, 2, 4].map((i) => new Uint8Array([...output, i]))]);
-  expect(form!.get("size")).toBe("1536x1024");
+  expect(form!.get("size")).toBe("3520x2336");
+  expect(form!.get("quality")).toBe("max");
+  expect(form!.get("output_format")).toBe("png");
   expect(form!.get("n")).toBe("1");
   const prompt = String(form!.get("prompt"));
   for (const text of [

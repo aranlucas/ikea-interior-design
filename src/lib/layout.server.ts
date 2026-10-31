@@ -1,3 +1,4 @@
+import { ENV } from "varlock/env";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { z } from "zod";
@@ -65,8 +66,8 @@ export async function analyzeLayout(args: {
   brief: string;
 }): Promise<string | null> {
   try {
-    if (!process.env.OPENAI_API_KEY) return null;
-    const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    if (!ENV.OPENAI_API_KEY) return null;
+    const provider = createOpenAI({ apiKey: ENV.OPENAI_API_KEY });
     const inventory = args.references.length
       ? `Products to place (physical sizes included where known):\n${args.references
           .map((r) => `- ${r.name} (${r.kind}${r.dimensions ? `, size ${r.dimensions}` : ""})`)
@@ -77,7 +78,7 @@ export async function analyzeLayout(args: {
         ? `The goal is to produce an emptied version of this room. Leave "placements" as an empty array, and use "cautions" to list anything that must survive emptying (built-ins, radiators, fixed shelving).`
         : `For each product listed, plan its placement: where it goes relative to the photo's viewpoint, and the fraction (0-1) of that wall's width it should span given its physical size${args.measurements ? ` and the client measurements: ${args.measurements}` : ""}.`;
     const reply = await generateText({
-      model: provider.chat(process.env.OPENAI_LAYOUT_MODEL || "gpt-6-luna"),
+      model: provider.chat(ENV.OPENAI_LAYOUT_MODEL || "gpt-6-luna"),
       system:
         "You estimate room geometry from photos and plan furniture placement at true scale. Reply with only a JSON object, no markdown fences.",
       messages: [

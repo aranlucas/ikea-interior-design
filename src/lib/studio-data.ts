@@ -1,3 +1,4 @@
+import { defaultImageSettings, type ImageSettings } from "./image-settings";
 import {
   collectionOptions,
   createTransaction,
@@ -41,7 +42,10 @@ export const studioRoomQuery = (id: string) => ({
   queryKey: ["studio", "selected-room", id] as const,
   query: (q: InitialQueryBuilder) => q.from({ room: roomCollection(id) }).findOne(),
 });
-export type RoomDraft = Pick<Room, "notes" | "style"> & { status: "Saving…" | "Saved" | "" };
+export type RoomDraft = Pick<Room, "notes" | "style"> & {
+  imageSettings: ImageSettings;
+  status: "Saving…" | "Saved" | "";
+};
 
 export function createStudioData(queryClient: QueryClient) {
   const db = new DbClient({ queryClient });
@@ -51,12 +55,17 @@ export function createStudioData(queryClient: QueryClient) {
     string,
     ReturnType<typeof createFormControl<RoomDraft>> & { revision: number }
   >();
-  function draftForm(room: Pick<Room, "id" | "notes" | "style">) {
+  function draftForm(room: Pick<Room, "id" | "notes" | "style" | "imageSettings">) {
     let form = forms.get(room.id);
     if (!form) {
       form = {
         ...createFormControl<RoomDraft>({
-          defaultValues: { notes: room.notes, style: room.style, status: "" },
+          defaultValues: {
+            notes: room.notes,
+            style: room.style,
+            imageSettings: room.imageSettings ?? defaultImageSettings,
+            status: "",
+          },
         }),
         revision: 0,
       };
@@ -89,7 +98,7 @@ export function createStudioData(queryClient: QueryClient) {
     );
     return next;
   }
-  type Draft = Pick<Room, "notes" | "style">;
+  type Draft = Pick<Room, "notes" | "style" | "imageSettings">;
   const pacers = new Map<
     string,
     {
@@ -118,7 +127,12 @@ export function createStudioData(queryClient: QueryClient) {
               if (!value) return;
               await update(
                 await api<Room>(studioUrls.rooms, {
-                  ...json({ roomId: id, notes: value.notes, style: value.style }),
+                  ...json({
+                    roomId: id,
+                    notes: value.notes,
+                    style: value.style,
+                    imageSettings: value.imageSettings,
+                  }),
                   method: "PUT",
                 }),
               );

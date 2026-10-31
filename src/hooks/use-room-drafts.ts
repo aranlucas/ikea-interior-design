@@ -1,14 +1,16 @@
+import { type ImageSettings } from "../lib/image-settings";
 import { useForm, useWatch } from "react-hook-form";
 import type { Room } from "../lib/types";
 import { useStudioData } from "../lib/studio-data";
 
 export function useRoomDrafts(
-  room: Pick<Room, "id" | "notes" | "style"> | undefined,
+  room: Pick<Room, "id" | "notes" | "style" | "imageSettings"> | undefined,
   onError: (message: string) => void,
 ) {
   const { saveDraft, draftForm } = useStudioData();
   const editor = draftForm(room || { id: "", notes: "", style: "" });
   const { register, getValues, setValue } = useForm({ formControl: editor.formControl });
+  const imageSettings = useWatch({ control: editor.control, name: "imageSettings" });
   const saveStatus = useWatch({ control: editor.control, name: "status" });
   async function save() {
     if (!room) return;
@@ -33,6 +35,11 @@ export function useRoomDrafts(
         ...register("style", { onChange: () => void save() }),
         defaultValue: getValues("style"),
       },
+    },
+    imageSettings,
+    setImageSettings: (value: ImageSettings) => {
+      setValue("imageSettings", value);
+      void save();
     },
     getDraft: getValues,
     saveStatus,

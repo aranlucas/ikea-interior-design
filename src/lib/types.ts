@@ -1,3 +1,4 @@
+import type { ImageSettings } from "./image-settings";
 import type { RoomGuide } from "./room-guide";
 export type Asset = {
   id: string;
@@ -19,6 +20,13 @@ export type Design = {
   mode?: string;
   starred?: boolean;
   inferred?: boolean;
+  generation?: {
+    model: string;
+    quality: ImageSettings["quality"];
+    size: string;
+    outputTokens?: number;
+    outputCostUsd?: number;
+  };
   guide?: Omit<RoomGuide, "image"> & {
     key: string;
     layoutKey: string;
@@ -68,6 +76,7 @@ export type Room = {
   notes: string;
   style: string;
   measurements?: string;
+  imageSettings?: ImageSettings;
   assets: Asset[];
   designs: Design[];
   model?: RoomModel;

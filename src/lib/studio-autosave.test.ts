@@ -32,7 +32,11 @@ async function setup() {
     const value = JSON.parse(init.body as string);
     writes.push(value);
     const row = server.find((r) => r.id === value.roomId)!;
-    Object.assign(row, { notes: value.notes, style: value.style });
+    Object.assign(row, {
+      notes: value.notes,
+      style: value.style,
+      imageSettings: value.imageSettings,
+    });
     return Response.json(row);
   });
   vi.stubGlobal("fetch", fetch);
@@ -150,5 +154,32 @@ it("retains request-local form values across editor mounts without copying serve
   expect(other.draftForm(room)).not.toBe(editor);
   expect(other.draftForm(room).getValues("notes")).toBe("");
   await other.db.cleanup();
+  await close();
+});
+
+it("paces image settings and brief edits together without leaking settings between rooms", async () => {
+  const { data, writes, close } = await setup();
+  const editor = data.draftForm(room);
+  editor.formControl.subscribe({ formState: { values: true }, callback: () => {} });
+  expect(editor.getValues("imageSettings")).toEqual({ quality: "max", size: "3840x2160" });
+  editor.setValue("imageSettings", { quality: "high", size: "photo" });
+  const settings = data.saveDraft("a", editor.getValues());
+  editor.setValue("notes", "Keep the windows");
+  const brief = data.saveDraft("a", editor.getValues());
+  await vi.advanceTimersByTimeAsync(500);
+  await Promise.all([settings.when("settled"), brief.when("settled")]);
+  expect(writes).toEqual([
+    {
+      roomId: "a",
+      notes: "Keep the windows",
+      style: "Japandi",
+      imageSettings: { quality: "high", size: "photo" },
+    },
+  ]);
+  expect(data.getRoom("a").get("a")?.imageSettings).toEqual({ quality: "high", size: "photo" });
+  expect(data.draftForm({ ...room, id: "b" }).getValues("imageSettings")).toEqual({
+    quality: "max",
+    size: "3840x2160",
+  });
   await close();
 });
