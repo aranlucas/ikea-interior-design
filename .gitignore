@@ -9,3 +9,5 @@ node_modules/
 dist/
 
 .varlock/
+.playwright-cli/
+out/

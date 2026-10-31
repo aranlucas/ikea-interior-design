@@ -2,6 +2,7 @@ import { ChevronDown, LoaderCircle } from "lucide-react";
 import { ReferencesList } from "./references-list";
 import { styles } from "../lib/studio-client";
 import type { StudioState } from "../hooks/use-studio";
+import { ImageSettings } from "./image-settings";
 export function DesignPanel({ state }: { state: StudioState }) {
   const {
     generating,
@@ -18,9 +19,15 @@ export function DesignPanel({ state }: { state: StudioState }) {
     generate,
   } = state;
   const session = state.session!;
+  const failed = state.job?.roomId === state.roomId && state.job.status === "failed";
+  const elsewhere = !generating && state.job?.status === "running";
   return (
-    <aside className="panel">
+    <aside className="panel" aria-label="Design brief and image settings">
       <div className="panel-body">
+        <div className="panel-heading">
+          <h1>Design your room</h1>
+          <p>Choose a photo, describe your idea, then generate.</p>
+        </div>
         <label className="field">
           <span>Style</span>
           <div className="select">
@@ -43,6 +50,12 @@ export function DesignPanel({ state }: { state: StudioState }) {
           />
         </label>
         <ReferencesList state={state} />
+        <ImageSettings
+          value={state.imageSettings}
+          onChange={state.setImageSettings}
+          model={session.imageModel}
+          disabled={generating}
+        />
       </div>
       <div className="panel-foot">
         {saveStatus && (
@@ -56,6 +69,11 @@ export function DesignPanel({ state }: { state: StudioState }) {
             Refine this design
           </label>
         )}
+        {failed && !generating && (
+          <p className="generation-error" role="status">
+            {state.job?.error || "Could not generate your design. Try again."}
+          </p>
+        )}
         <button
           className="button primary block"
           disabled={!base || locked || !session.generationConfigured}
@@ -65,6 +83,8 @@ export function DesignPanel({ state }: { state: StudioState }) {
             <>
               <LoaderCircle size={16} className="spin" /> Generating…
             </>
+          ) : failed ? (
+            "Try again"
           ) : refine ? (
             "Refine"
           ) : (
@@ -72,9 +92,24 @@ export function DesignPanel({ state }: { state: StudioState }) {
           )}
         </button>
         {!session.generationConfigured ? (
-          <p className="hint">Image generation isn’t configured. The 3D room works without AI.</p>
+          <p className="hint">
+            To generate images, add OPENAI_API_KEY to the server. You can still add photos and build
+            a 3D room without AI.
+          </p>
+        ) : elsewhere ? (
+          <p className="hint" role="status">
+            A design is generating in another room. You can generate here when it finishes.
+          </p>
+        ) : generating ? (
+          <p className="hint" role="status">
+            Your result saves to this room. You can return later.
+          </p>
+        ) : !base ? (
+          <p className="hint">Add a room photo to generate.</p>
         ) : (
-          !base && <p className="hint">Add a room photo to generate.</p>
+          <p className="hint">
+            Uses OpenAI API credits. Input images are billed separately from image output.
+          </p>
         )}
       </div>
     </aside>

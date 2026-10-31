@@ -52,11 +52,23 @@ it("persists a paid result after POST returns, scopes status, and releases the l
   await s.mutateRooms(owner, (all) => {
     all[0].notes = "Edited while generating";
   });
-  complete({ image: { uint8Array: new Uint8Array([1, 2]) } });
+  expect(vi.mocked(generateImage).mock.calls[0][0]).toMatchObject({
+    size: "3840x2160",
+    providerOptions: { openai: { quality: "max", outputFormat: "png" } },
+    maxRetries: 0,
+  });
+  complete({ image: { uint8Array: new Uint8Array([1, 2]) }, usage: { outputTokens: 13000 } });
   await vi.waitFor(() => expect(s.getJob(owner, jobId)?.status).toBe("succeeded"));
   const job = s.getJob(owner, jobId)!;
   expect((await s.rooms(owner))[0].designs[0].id).toBe(job.designId);
   expect((await s.rooms(owner))[0].notes).toBe("Edited while generating");
+  expect((await s.rooms(owner))[0].designs[0].generation).toMatchObject({
+    model: "gpt-image-2.5-sunburst",
+    quality: "max",
+    size: "3840x2160",
+    outputTokens: 13000,
+    outputCostUsd: 0.39,
+  });
   expect(s.claimGeneration(owner)).toBe(true);
   s.releaseGeneration(owner);
   vi.mocked(generateImage).mockRejectedValueOnce(new Error("Provider failed"));

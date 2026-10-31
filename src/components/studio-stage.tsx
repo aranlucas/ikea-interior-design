@@ -123,22 +123,42 @@ export function StudioStage({ state }: { state: StudioState }) {
             <button className="button" disabled={locked} onClick={() => input.current?.click()}>
               Choose photos
             </button>
-            <small className="muted">
-              JPG, PNG or WebP · Preview your room in 3D before generating
-            </small>
+            <small className="muted">JPG, PNG or WebP · Up to 25 MB each</small>
           </div>
         )}
         {generating && (
-          <div className="overlay">
+          <div className="overlay" role="status" aria-live="polite">
             <LoaderCircle className="spin" size={22} />
             <p>Generating…</p>
-            <small>This can take a few minutes.</small>
+            <small>High-detail images can take a few minutes.</small>
+            <small>Your result will be saved to this room.</small>
           </div>
         )}
         {shown === "design" && active?.inferred && (
           <span className="tag right">AI finish · Includes inferred areas</span>
         )}
       </div>
+      {active?.generation && (
+        <details className="design-details">
+          <summary>
+            {active.generation.quality === "auto"
+              ? "Auto quality"
+              : `${active.generation.quality === "xhigh" ? "Extra high" : active.generation.quality[0].toUpperCase() + active.generation.quality.slice(1)} quality`}
+            {" · "}
+            {active.generation.size.replace("x", " × ")}
+            {" · PNG"}
+          </summary>
+          <p>{active.generation.model}</p>
+          {active.generation.outputTokens !== undefined && (
+            <p>
+              {active.generation.outputTokens.toLocaleString()} output tokens
+              {active.generation.outputCostUsd !== undefined &&
+                ` · $${active.generation.outputCostUsd.toFixed(4)} image output`}
+              . Input tokens are billed separately.
+            </p>
+          )}
+        </details>
+      )}
       <Filmstrips state={state} />
     </section>
   );

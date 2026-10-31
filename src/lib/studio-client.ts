@@ -4,6 +4,7 @@ export type Session = {
   local: boolean;
   authConfigured: boolean;
   generationConfigured: boolean;
+  imageModel: string;
 };
 export type View = "photo" | "room" | "design" | "compare";
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {

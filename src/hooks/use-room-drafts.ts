@@ -3,19 +3,29 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Room } from "../lib/types";
 import { api, json } from "../lib/studio-client";
 import { useStudioData } from "../lib/studio-data";
-type Draft = { notes: string; style: string; status: "Saving…" | "Saved" | "" };
+import { defaultImageSettings, type ImageSettings } from "../lib/image-settings";
+type Draft = {
+  notes: string;
+  style: string;
+  imageSettings: ImageSettings;
+  status: "Saving…" | "Saved" | "Not saved";
+};
 export function useRoomDrafts(room: Room | undefined, onError: (message: string) => void) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const latest = useRef(drafts);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const client = useQueryClient();
   const { rooms, change, update } = useStudioData();
-  function edit(field: "notes" | "style", value: string) {
+  function edit(changes: Partial<Pick<Draft, "notes" | "style" | "imageSettings">>) {
     if (!room) return;
     const id = room.id;
     const draft: Draft = {
-      ...(latest.current[id] || { notes: room.notes, style: room.style }),
-      [field]: value,
+      ...(latest.current[id] || {
+        notes: room.notes,
+        style: room.style,
+        imageSettings: room.imageSettings ?? defaultImageSettings,
+      }),
+      ...changes,
       status: "Saving…",
     };
     latest.current = { ...latest.current, [id]: draft };
@@ -35,7 +45,12 @@ export function useRoomDrafts(room: Room | undefined, onError: (message: string)
               async () => {
                 await update(
                   await api<Room>("/api/rooms", {
-                    ...json({ roomId: id, notes: draft.notes, style: draft.style }),
+                    ...json({
+                      roomId: id,
+                      notes: draft.notes,
+                      style: draft.style,
+                      imageSettings: draft.imageSettings,
+                    }),
                     method: "PUT",
                   }),
                 );
@@ -44,13 +59,14 @@ export function useRoomDrafts(room: Room | undefined, onError: (message: string)
                 rooms.update(id, (value) => {
                   value.notes = draft.notes;
                   value.style = draft.style;
+                  value.imageSettings = draft.imageSettings;
                 }),
             );
           },
           onSuccess: () => finish("Saved"),
           onError: (error: Error) => {
             onError(error.message || "Could not save room.");
-            finish("");
+            finish("Not saved");
           },
         });
         function finish(status: Draft["status"]) {
@@ -66,7 +82,11 @@ export function useRoomDrafts(room: Room | undefined, onError: (message: string)
     notes: room ? (drafts[room.id]?.notes ?? room.notes) : "",
     style: room ? (drafts[room.id]?.style ?? room.style) : "",
     saveStatus: room ? drafts[room.id]?.status || "" : "",
-    setNotes: (value: string) => edit("notes", value),
-    setStyle: (value: string) => edit("style", value),
+    imageSettings: room
+      ? (drafts[room.id]?.imageSettings ?? room.imageSettings ?? defaultImageSettings)
+      : defaultImageSettings,
+    setNotes: (value: string) => edit({ notes: value }),
+    setStyle: (value: string) => edit({ style: value }),
+    setImageSettings: (value: ImageSettings) => edit({ imageSettings: value }),
   };
 }

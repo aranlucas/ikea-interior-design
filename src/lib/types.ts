@@ -1,3 +1,4 @@
+import type { ImageSettings } from "./image-settings";
 export type Asset = {
   id: string;
   name: string;
@@ -15,6 +16,13 @@ export type Design = {
   createdAt: string;
   baseId: string;
   inferred?: boolean;
+  generation?: {
+    model: string;
+    quality: ImageSettings["quality"];
+    size: string;
+    outputTokens?: number;
+    outputCostUsd?: number;
+  };
 };
 export type RoomSurface = "back" | "right" | "front" | "left";
 export type RoomModel = {
@@ -52,6 +60,7 @@ export type Room = {
   type: string;
   notes: string;
   style: string;
+  imageSettings?: ImageSettings;
   assets: Asset[];
   designs: Design[];
   model?: RoomModel;

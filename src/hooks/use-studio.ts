@@ -42,13 +42,14 @@ export function useStudio() {
   const [baseId, setBaseId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [designId, setDesignId] = useState("");
-  const [view, setView] = useState<View>("room");
+  const [view, setView] = useState<View>("photo");
   const [split, setSplit] = useState(50);
   const [refine, setRefine] = useState(false);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const room = all.find((r) => r.id === roomId);
-  const { notes, style, setNotes, setStyle, saveStatus } = useRoomDrafts(room, setError);
+  const { notes, style, setNotes, setStyle, saveStatus, imageSettings, setImageSettings } =
+    useRoomDrafts(room, setError);
   const jobQuery = useQuery({
     queryKey: ["generation"],
     enabled: !!session?.user && typeof window !== "undefined",
@@ -82,9 +83,14 @@ export function useStudio() {
   if (selectionRoom !== roomId) {
     setSelectionRoom(roomId);
     setBaseId(room?.assets.find((a) => a.kind === "room")?.id || "");
-    setSelected(room?.assets.filter((a) => a.kind !== "room").map((a) => a.id) || []);
+    setSelected(
+      room?.assets
+        .filter((a) => a.kind !== "room")
+        .map((a) => a.id)
+        .slice(0, 10) || [],
+    );
     setDesignId("");
-    setView("room");
+    setView("photo");
     setRefine(false);
   }
   const queryError = sessionQuery.error || roomsQuery.error || jobQuery.error;
@@ -155,10 +161,11 @@ export function useStudio() {
         if (dimensions) data.set("dimensions", dimensions);
         const r = await api<Room>("/api/rooms", { method: "PATCH", body: data });
         await update(r);
-        if (kind !== "room") setSelected((p) => [...p, r.assets[r.assets.length - 1].id]);
+        if (kind !== "room")
+          setSelected((p) => [...p, r.assets[r.assets.length - 1].id].slice(0, 10));
         else {
           setBaseId((p) => p || r.assets.find((a) => a.kind === "room")?.id || "");
-          if (id === currentRoom.current) setView("room");
+          if (id === currentRoom.current) setView("photo");
         }
       }
       setModal(null);
@@ -190,7 +197,7 @@ export function useStudio() {
         }),
       );
       await update(r);
-      setSelected((p) => [...p, r.assets[r.assets.length - 1].id]);
+      setSelected((p) => [...p, r.assets[r.assets.length - 1].id].slice(0, 10));
       setModal(null);
     });
   }
@@ -317,6 +324,7 @@ export function useStudio() {
         assetIds: selected,
         previousDesignId: refine ? active?.id : undefined,
         fillGaps: options?.fillGaps,
+        imageSettings,
       });
       watching.current = r.jobId;
       queryClient.setQueryData(["generation"], {
@@ -397,6 +405,8 @@ export function useStudio() {
     upload,
     reference,
     saveStatus,
+    imageSettings,
+    setImageSettings,
     renameRoom,
     deleteDesign,
     saveSize,

@@ -13,10 +13,14 @@ import {
 } from "./storage.server";
 import { designInput, buildPrompt } from "./validation";
 import { outputSize } from "./image-size";
+import { defaultImageModel, defaultImageSettings, outputCost } from "./image-settings";
+import { generationError, retryImageRequest } from "./image-errors.server";
 
 import type { z } from "zod";
 export async function startGeneration(owner: string, input: z.infer<typeof designInput>) {
   const u = { sub: owner };
+  const settings = input.imageSettings ?? defaultImageSettings;
+  const model = process.env.OPENAI_IMAGE_MODEL || defaultImageModel;
   if (!process.env.OPENAI_API_KEY)
     throw new Error("Add OPENAI_API_KEY to the server environment to generate a design.");
   const all = await rooms(u.sub);
@@ -66,6 +70,7 @@ export async function startGeneration(owner: string, input: z.infer<typeof desig
       if (!target) throw new Error("Room was removed before generation started.");
       target.notes = input.notes;
       target.style = input.style;
+      target.imageSettings = settings;
     });
     job = createJob(u.sub, room.id);
   } catch (error) {
@@ -76,14 +81,21 @@ export async function startGeneration(owner: string, input: z.infer<typeof desig
     if (!(await rooms(u.sub)).some((r) => r.id === room.id))
       throw new Error("Room was removed before generation started.");
     const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const result = await generateImage({
-      model: provider.image(process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-sunburst"),
-      prompt: { text: prompt, images },
-      size: outputSize(images[0]),
-      n: 1,
-      maxRetries: 0,
-      abortSignal: AbortSignal.timeout(240_000),
-    });
+    const size = settings.size === "photo" ? outputSize(images[0]) : settings.size;
+    const signal = AbortSignal.timeout(240_000);
+    const result = await retryImageRequest(
+      () =>
+        generateImage({
+          model: provider.image(model),
+          prompt: { text: prompt, images },
+          size,
+          providerOptions: { openai: { quality: settings.quality, outputFormat: "png" } },
+          n: 1,
+          maxRetries: 0,
+          abortSignal: signal,
+        }),
+      signal,
+    );
     const id = crypto.randomUUID();
     const key = `${ownerPrefix(u.sub)}${room.id}/${id}.png`;
     await save(key, result.image.uint8Array, "image/png");
@@ -97,6 +109,13 @@ export async function startGeneration(owner: string, input: z.infer<typeof desig
         createdAt: new Date().toISOString(),
         baseId: base.id,
         inferred: input.fillGaps || undefined,
+        generation: {
+          model,
+          quality: settings.quality,
+          size,
+          outputTokens: result.usage?.outputTokens,
+          outputCostUsd: outputCost(model, result.usage?.outputTokens),
+        },
       });
       return target;
     });
@@ -109,7 +128,7 @@ export async function settleGeneration(owner: string, jobId: string, work: () =>
     finishJob(owner, jobId, { designId: await work() });
   } catch (error) {
     finishJob(owner, jobId, {
-      error: error instanceof Error ? error.message : "Generation failed.",
+      error: generationError(error),
     });
   } finally {
     releaseGeneration(owner);
