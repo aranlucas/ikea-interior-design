@@ -11,8 +11,17 @@ export function roomName(type: string, taken: string[]) {
   for (let n = 2; taken.includes(name); n++) name = `${type} ${n}`;
   return name;
 }
-export const designModes = ["redesign", "stage", "empty", "sketch"] as const;
-export const peopleOptions = ["none", "man", "woman", "couple", "family", "dog"] as const;
+export const designModes = ["redesign", "stage", "paint", "empty", "sketch", "freestyle"] as const;
+export const peopleOptions = [
+  "none",
+  "man",
+  "woman",
+  "couple",
+  "family",
+  "friends",
+  "dog",
+  "cat",
+] as const;
 export const lightingOptions = [
   "natural",
   "daylight",
@@ -20,15 +29,17 @@ export const lightingOptions = [
   "evening",
   "cozy lamps",
 ] as const;
+export const orientations = ["landscape", "portrait", "square"] as const;
 export const designInput = z.object({
   roomId: z.uuid(),
-  baseId: z.uuid(),
+  baseId: z.uuid().optional(),
   notes: z.string().max(4000),
   style: z.string().max(100),
   assetIds: z.array(z.uuid()).max(10),
   previousDesignId: z.uuid().optional(),
   mode: z.enum(designModes).default("redesign"),
-  count: z.union([z.literal(1), z.literal(2), z.literal(4)]).default(1),
+  count: z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8)]).default(1),
+  orientation: z.enum(orientations).default("landscape"),
   measurements: z.string().trim().max(200).default(""),
   people: z.enum(peopleOptions).default("none"),
   lighting: z.enum(lightingOptions).default("natural"),
@@ -36,16 +47,43 @@ export const designInput = z.object({
   roomGuide: roomGuideInput.optional(),
 });
 export const uuid = z.uuid();
+export const editInput = z.object({
+  roomId: uuid,
+  designId: uuid,
+  prompt: z.string().trim().min(1).max(1000),
+});
+export function buildEditPrompt(instruction: string) {
+  return `Edit the masked (transparent) region of this interior design: ${instruction}. Keep everything outside the mask exactly as it is — furniture, materials, colors, lighting, and camera. Match the surrounding perspective, grain, and lighting so the edit blends seamlessly and photorealistically. Return only the edited image, without text, labels, borders, or collage.`;
+}
+
+const outdoorRoomTypes = new Set(["Outdoor", "Garden", "Patio", "House exterior", "Balcony"]);
+export const isOutdoor = (roomType: string) => outdoorRoomTypes.has(roomType);
 
 const MODE_DIRECTIVES: Record<(typeof designModes)[number], string> = {
   redesign:
     "Image 1 is the exact camera view to redesign. Preserve its architecture, room dimensions, perspective, windows, doors, ceiling, permanent fixtures, and natural light. Do not invent space or move walls.",
   stage:
     "The room is empty or nearly empty: virtually stage it. Preserve its architecture, room dimensions, perspective, windows, doors, ceiling, permanent fixtures, and natural light, and do not invent space or move walls. Furnish and decorate the space so it feels lived-in and appealing, using the referenced products where provided.",
+  paint:
+    "Repaint and refinish only: preserve the camera view, all furniture, decor, layout, room dimensions, perspective, windows, doors, and natural light exactly as they are. Change only colors and finishes — wall and ceiling paint, floor finish, trim, tile, and other surface materials — following the brief and style. Do not add, remove, move, or restyle any furniture or decor.",
   empty:
     "Empty the space: remove all furniture, rugs, decor, wall art, and personal items. Keep the architecture, floor and wall finishes, windows, doors, ceiling, built-in and permanent fixtures, and natural light exactly as they are. Return a clean, unfurnished version of the same room from the same camera view.",
   sketch:
     "Image 1 is a sketch, drawing, or 3D-software screenshot rather than a photograph. Turn it into a photorealistic interior: honor the layout, proportions, openings, and fixed elements it depicts, then render believable materials, natural light, soft shadows, and furnishings in the chosen style.",
+  freestyle:
+    "There is no input photo: compose the space from scratch as a photorealistic eye-level photograph. Invent plausible architecture appropriate to the space — walls, windows, doors, ceiling, and proportions for interiors; boundaries, structures, and plantings for outdoor spaces. Keep the invented architecture coherent and unremarkable so the style, furnishings, and brief stay the focus.",
+};
+const OUTDOOR_DIRECTIVES: Partial<Record<(typeof designModes)[number], string>> = {
+  redesign:
+    "Image 1 is the exact camera view to redesign. Preserve the property's fixed structure and layout: buildings, boundary walls, fencing, paving, pools, decks, permanent planters, and mature plantings. Do not move structures or change the property's boundaries.",
+  stage:
+    "The outdoor space is bare: stage it. Preserve fixed structures, boundaries, paving, and permanent plantings, and do not move structures. Furnish and landscape the space so it feels inviting and finished, using the referenced products where provided.",
+  paint:
+    "Repaint and refinish only: preserve the camera view, all furniture, plantings, and layout exactly as they are. Change only colors and finishes on fences, walls, decks, and paving, following the brief and style. Do not add, remove, or move anything else.",
+  empty:
+    "Empty the space: remove furniture, umbrellas, planters, decor, toys, and vehicles. Keep buildings, fixed structures, paving, lawns, and mature plantings exactly as they are. Return a clean, cleared version of the same space from the same camera view.",
+  sketch:
+    "Image 1 is a sketch, drawing, or 3D-software screenshot rather than a photograph. Turn it into a photorealistic outdoor scene: honor the layout, proportions, structures, and fixed elements it depicts, then render believable materials, natural light, soft shadows, and furnishings in the chosen style.",
 };
 const PEOPLE_PHRASES: Record<(typeof peopleOptions)[number], string> = {
   none: "",
@@ -53,17 +91,29 @@ const PEOPLE_PHRASES: Record<(typeof peopleOptions)[number], string> = {
   woman: "a woman",
   couple: "a couple",
   family: "a family",
+  friends: "a small group of friends",
   dog: "a dog",
+  cat: "a cat",
 };
 
 export function buildPrompt(
-  roomName: string,
+  roomType: string,
   input: z.infer<typeof designInput>,
   references: { name: string; kind: string; notes?: string; url?: string; dimensions?: string }[],
   roomCount: number,
   plan?: string,
   guide?: RoomGuideConstraints,
 ) {
+  const outdoor = isOutdoor(roomType);
+  const roomName = roomType === "Other" ? "a room" : `a ${roomType.toLowerCase()}`;
+  const photoLess = !guide && roomCount === 0;
+  const directive = guide
+    ? null
+    : photoLess
+      ? input.previousDesignId
+        ? "The final image is the previous design; there is no separate architectural photo. Refine it in place using the client brief, keeping its camera, architecture, furniture identities, quantities, and layout unless the brief asks for a change."
+        : MODE_DIRECTIVES.freestyle
+      : ((outdoor ? OUTDOOR_DIRECTIVES[input.mode] : undefined) ?? MODE_DIRECTIVES[input.mode]);
   const referenceList = references
     .map(
       (r, i) =>
@@ -80,10 +130,10 @@ export function buildPrompt(
     .filter(Boolean)
     .join(" ");
   const parts = [
-    `You are an expert interior designer producing a photorealistic visualization of ${roomName}.`,
+    `You are an expert ${outdoor ? "landscape" : "interior"} designer producing a photorealistic visualization of ${roomName}.`,
     guide
-      ? `Image 1 is the client's chosen 3D camera/layout guide, a clean render of an AI-estimated room. Keep this exact viewpoint, framing, left/right orientation, footprint, openings, and fixed elements. Preserve the cutaway or overhead composition if shown; do not switch to a source photo's camera. Treat this as rendering over image 1, not composing a new room photograph: keep the camera elevation, azimuth, roll, field of view, perspective convergence, room silhouette, and amount of surrounding background. Do not zoom into the room, lower the camera to eye level, rotate to show the furniture front-on, or restore cutaway walls that hide the interior. Photorealism applies to materials and lighting, not a change in projection or composition. Apply the requested design task: ${input.mode === "empty" ? "remove movable furnishings, retain permanent fixtures" : input.mode === "stage" ? "furnish the empty room" : "create a furnished photorealistic interior"}. The render's simplified colors, amber uncertainty tint, and transparency are diagram conventions, not finishes to reproduce.`
-      : MODE_DIRECTIVES[input.mode],
+      ? `Image 1 is the client's chosen 3D camera/layout guide, a clean render of an AI-estimated room. Keep this exact viewpoint, framing, left/right orientation, footprint, openings, and fixed elements. Preserve the cutaway or overhead composition if shown; do not switch to a source photo's camera. Treat this as rendering over image 1, not composing a new room photograph: keep the camera elevation, azimuth, roll, field of view, perspective convergence, room silhouette, and amount of surrounding background. Do not zoom into the room, lower the camera to eye level, rotate to show the furniture front-on, or restore cutaway walls that hide the interior. Photorealism applies to materials and lighting, not a change in projection or composition. Apply the requested design task: ${input.mode === "empty" ? "remove movable furnishings, retain permanent fixtures" : input.mode === "stage" ? "furnish the empty room" : input.mode === "paint" ? "repaint and refinish only: keep all furniture, layout, and camera, change only colors and finishes" : "create a furnished photorealistic interior"}. The render's simplified colors, amber uncertainty tint, and transparency are diagram conventions, not finishes to reproduce.`
+      : directive,
     scene,
     guide
       ? `Images 2 through ${roomCount} are original room photos in the saved layout's source-photo order (photoNumber 1 is image 2). Use them as appearance and evidence for materials, windows, doors, fixtures, and daylight, not as the output camera. Use each element's photoNumbers to find its supporting source images; the same object seen in multiple photos is one object, not several. The capture controls projection and placement; source photos supply appearance details for the corresponding elements. Do not move an element to its screen position in a different source camera. Where evidence conflicts with estimated geometry, retain photo-supported identity and appearance without changing the chosen camera, mirroring the room, or inventing observed space.`
@@ -118,7 +168,9 @@ export function buildPrompt(
       ? "Final camera check: compare the room outline, visible wall edges, opening positions, and fixture anchors to image 1 in normalized image coordinates. Preserve their screen-space arrangement, occlusion order, and framing. Output one photorealistic architectural visualization from the captured camera, retaining an exterior elevated, cutaway, or top-down view whenever image 1 shows one. Do not return an eye-level interior photograph in place of the captured view. No text, labels, collage, borders, or before/after split."
       : input.mode === "empty"
         ? "Return only a polished photograph of the emptied room, without text, labels, collage, borders, or a before/after split."
-        : "Return only a polished interior photograph, without text, labels, collage, borders, or a before/after split.",
+        : outdoor
+          ? "Return only a polished photograph of the space, without text, labels, collage, borders, or a before/after split."
+          : "Return only a polished interior photograph, without text, labels, collage, borders, or a before/after split.",
     "This is a design visualization, not a measurement or guarantee of fit.",
   ];
   return parts.filter(Boolean).join(" ");

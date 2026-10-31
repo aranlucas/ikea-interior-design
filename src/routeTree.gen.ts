@@ -21,6 +21,7 @@ import { Route as ApiSessionRouteImport } from './routes/api/session'
 import { Route as RoomsIndexRouteImport } from './routes/rooms.index'
 import { Route as RoomsRoomIdRouteImport } from './routes/rooms.$roomId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiDesignsEditRouteImport } from './routes/api/designs.edit'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,6 +83,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDesignsEditRoute = ApiDesignsEditRouteImport.update({
+  id: '/api/designs/edit',
+  path: '/api/designs/edit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/rooms/$roomId': typeof RoomsRoomIdRoute
   '/rooms/': typeof RoomsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/designs/edit': typeof ApiDesignsEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/rooms/$roomId': typeof RoomsRoomIdRoute
   '/rooms': typeof RoomsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/designs/edit': typeof ApiDesignsEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/rooms/$roomId': typeof RoomsRoomIdRoute
   '/rooms/': typeof RoomsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/designs/edit': typeof ApiDesignsEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
     | '/rooms/$roomId'
     | '/rooms/'
     | '/api/auth/$'
+    | '/api/designs/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
     | '/rooms/$roomId'
     | '/rooms'
     | '/api/auth/$'
+    | '/api/designs/edit'
   id:
     | '__root__'
     | '/'
@@ -167,6 +178,7 @@ export interface FileRouteTypes {
     | '/rooms/$roomId'
     | '/rooms/'
     | '/api/auth/$'
+    | '/api/designs/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -180,6 +192,7 @@ export interface RootRouteChildren {
   ApiRoomsRoute: typeof ApiRoomsRoute
   ApiSessionRoute: typeof ApiSessionRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiDesignsEditRoute: typeof ApiDesignsEditRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -268,6 +281,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/designs/edit': {
+      id: '/api/designs/edit'
+      path: '/api/designs/edit'
+      fullPath: '/api/designs/edit'
+      preLoaderRoute: typeof ApiDesignsEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -294,6 +314,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiRoomsRoute: ApiRoomsRoute,
   ApiSessionRoute: ApiSessionRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiDesignsEditRoute: ApiDesignsEditRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -2,12 +2,14 @@ import { ChevronDown, LoaderCircle } from "lucide-react";
 import { RoomSizeFields } from "./room-size-fields";
 import { ReferencesList } from "./references-list";
 import {
-  styles,
+  styleGroups,
   modes,
   peopleChoices,
   lightingChoices,
+  orientationChoices,
   type People,
   type Lighting,
+  type Orientation,
 } from "../lib/studio-client";
 import type { StudioState } from "../hooks/use-studio";
 export function DesignPanel({ state }: { state: StudioState }) {
@@ -23,6 +25,8 @@ export function DesignPanel({ state }: { state: StudioState }) {
     setMeasurements,
     count,
     setCount,
+    orientation,
+    setOrientation,
     people,
     setPeople,
     lighting,
@@ -33,6 +37,8 @@ export function DesignPanel({ state }: { state: StudioState }) {
     generate,
   } = state;
   const session = state.session!;
+  const freestyle = mode === "freestyle";
+  const canGenerate = !!base || freestyle;
   return (
     <aside className="panel">
       <div className="panel-body">
@@ -40,13 +46,13 @@ export function DesignPanel({ state }: { state: StudioState }) {
           <div className="field-head">
             <span>Mode</span>
           </div>
-          <div className="segmented full" role="group" aria-label="Design mode">
+          <div className="segmented full wrap" role="group" aria-label="Design mode">
             {modes.map((m) => (
               <button
                 key={m.id}
                 type="button"
                 aria-pressed={mode === m.id}
-                disabled={locked}
+                disabled={locked || (!base && m.id !== "freestyle")}
                 onClick={() => setMode(m.id)}
               >
                 {m.label}
@@ -59,13 +65,37 @@ export function DesignPanel({ state }: { state: StudioState }) {
           <span>Style</span>
           <div className="select">
             <select {...draftFields.style}>
-              {styles.map((s) => (
-                <option key={s}>{s}</option>
+              {styleGroups.map((g) => (
+                <optgroup key={g.group} label={g.group}>
+                  {g.items.map((s) => (
+                    <option key={s}>{s}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             <ChevronDown size={14} />
           </div>
         </label>
+        {freestyle && (
+          <div className="field">
+            <div className="field-head">
+              <span>Orientation</span>
+            </div>
+            <div className="segmented full" role="group" aria-label="Orientation">
+              {orientationChoices.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  aria-pressed={orientation === o.id}
+                  disabled={locked}
+                  onClick={() => setOrientation(o.id as Orientation)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="field-row">
           <label className="field">
             <span>
@@ -130,7 +160,7 @@ export function DesignPanel({ state }: { state: StudioState }) {
             <span>Variations</span>
           </div>
           <div className="segmented" role="group" aria-label="Designs to generate">
-            {([1, 2, 4] as const).map((n) => (
+            {([1, 2, 4, 8] as const).map((n) => (
               <button
                 key={n}
                 type="button"
@@ -145,7 +175,7 @@ export function DesignPanel({ state }: { state: StudioState }) {
         </div>
         <button
           className="button primary block"
-          disabled={!base || locked || !session.generationConfigured}
+          disabled={!canGenerate || locked || !session.generationConfigured}
           onClick={() => void generate()}
         >
           {generating ? (
@@ -156,6 +186,8 @@ export function DesignPanel({ state }: { state: StudioState }) {
             "Refine"
           ) : count > 1 ? (
             `Generate ${count}`
+          ) : freestyle ? (
+            "Generate freestyle"
           ) : state.shown === "room" ? (
             "Generate from photo"
           ) : (
@@ -167,9 +199,9 @@ export function DesignPanel({ state }: { state: StudioState }) {
         )}
         {!session.generationConfigured ? (
           <p className="hint">Image generation isn’t configured. The 3D room works without AI.</p>
-        ) : (
-          !base && <p className="hint">Add a room photo to generate.</p>
-        )}
+        ) : !canGenerate ? (
+          <p className="hint">Add a room photo to generate.</p>
+        ) : null}
       </div>
     </aside>
   );

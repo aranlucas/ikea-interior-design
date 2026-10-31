@@ -1,8 +1,18 @@
-import { useEffect } from "react";
-import { Download, ImagePlus, LoaderCircle, MoveHorizontal, Star } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Brush,
+  Clapperboard,
+  Download,
+  ImagePlus,
+  LoaderCircle,
+  MoveHorizontal,
+  Star,
+} from "lucide-react";
 import { assetUrl } from "../lib/types";
 import { stepPhoto } from "../lib/photo-nav";
 import { Filmstrips } from "./filmstrips";
+import { DesignEditor } from "./design-editor";
+import { CompareVideo } from "./compare-video";
 import type { StudioState } from "../hooks/use-studio";
 import { lazy, Suspense } from "react";
 const RoomPreview = lazy(() => import("./room-preview"));
@@ -31,13 +41,15 @@ export function StudioStage({ state }: { state: StudioState }) {
     setDesignId,
   } = state;
   const room = state.room!;
+  const [editing, setEditing] = useState(false);
+  const [video, setVideo] = useState(false);
   const comparisonKey = design?.guide?.key || before?.key;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (shown === "room") return;
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      if (modal || sizeAsset || locked) return;
+      if (editing || video || modal || sizeAsset || locked) return;
       const el = e.target;
       if (
         el instanceof HTMLElement &&
@@ -56,11 +68,23 @@ export function StudioStage({ state }: { state: StudioState }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [photos, base, modal, sizeAsset, locked, shown, setBaseId, setDesignId, setView]);
+  }, [
+    photos,
+    base,
+    modal,
+    sizeAsset,
+    locked,
+    shown,
+    editing,
+    video,
+    setBaseId,
+    setDesignId,
+    setView,
+  ]);
   return (
     <section className="stage">
       <div className="stage-bar">
-        {photos.length > 0 ? (
+        {photos.length > 0 || room.designs.length > 0 ? (
           <div className="segmented" role="group" aria-label="View">
             {(["photo", "room", ...(design ? (["design", "compare"] as const) : [])] as const).map(
               (v) => (
@@ -90,6 +114,26 @@ export function StudioStage({ state }: { state: StudioState }) {
         )}
         {active && (
           <span className="stage-actions">
+            <button
+              className="icon-button"
+              aria-label="Brush edit this design"
+              title="Brush edit"
+              disabled={locked}
+              onClick={() => setEditing(true)}
+            >
+              <Brush size={16} />
+            </button>
+            {comparisonKey && (
+              <button
+                className="icon-button"
+                aria-label="Export before/after video"
+                title="Before/after video"
+                disabled={locked}
+                onClick={() => setVideo(true)}
+              >
+                <Clapperboard size={16} />
+              </button>
+            )}
             <button
               className="icon-button"
               aria-pressed={!!active.starred}
@@ -192,6 +236,9 @@ export function StudioStage({ state }: { state: StudioState }) {
             </small>
           </div>
         )}
+        {shown === "design" && active?.mode === "freestyle" && (
+          <span className="tag right">Freestyle · No input photo</span>
+        )}
         {shown === "design" && active?.inferred && (
           <span className="tag right">AI finish · Includes inferred areas</span>
         )}
@@ -231,6 +278,17 @@ export function StudioStage({ state }: { state: StudioState }) {
           <summary>Layout plan</summary>
           <p>{active.plan}</p>
         </details>
+      )}
+      {editing && active && (
+        <DesignEditor state={state} design={active} onClose={() => setEditing(false)} />
+      )}
+      {video && active && comparisonKey && (
+        <CompareVideo
+          design={active}
+          beforeKey={comparisonKey}
+          roomName={room.name}
+          onClose={() => setVideo(false)}
+        />
       )}
       <Filmstrips state={state} />
     </section>

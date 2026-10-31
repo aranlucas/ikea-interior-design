@@ -8,7 +8,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useStudioError } from "../lib/studio-feedback";
 import { useRoomDrafts } from "./use-room-drafts";
 import type { RoomGuide } from "../lib/room-guide";
-import type { Room, Asset } from "../lib/types";
+import type { Room, Asset, Design } from "../lib/types";
 import {
   api,
   studioUrls,
@@ -18,6 +18,7 @@ import {
   type Mode,
   type People,
   type Lighting,
+  type Orientation,
 } from "../lib/studio-client";
 export function useStudio(roomId: string) {
   const { getRoom, update, change, runRoom, summaries, watching } = useStudioData();
@@ -52,7 +53,8 @@ export function useStudio(roomId: string) {
   const [refine, setRefine] = useState(false);
   const [mode, setMode] = useState<Mode>("redesign");
   const [measurements, setMeasurements] = useState(() => room?.measurements || "");
-  const [count, setCount] = useState<1 | 2 | 4>(1);
+  const [count, setCount] = useState<1 | 2 | 4 | 8>(1);
+  const [orientation, setOrientation] = useState<Orientation>("landscape");
   const [people, setPeople] = useState<People>("none");
   const [lighting, setLighting] = useState<Lighting>("natural");
   const [dragging, setDragging] = useState(false);
@@ -304,43 +306,70 @@ export function useStudio(roomId: string) {
   const generationMutation = useMutation({
     mutationFn: (body: unknown) => api<{ jobId: string }>(studioUrls.generation, json(body)),
   });
+  function seedWatch(jobId: string) {
+    watching.current = jobId;
+    queryClient.setQueryData(generationOptions().queryKey, {
+      job: {
+        id: jobId,
+        owner: "",
+        roomId,
+        status: "running",
+        error: null,
+        designId: null,
+        createdAt: "",
+        updatedAt: "",
+      },
+    });
+    return queryClient.invalidateQueries({ queryKey: generationOptions().queryKey });
+  }
   async function generate(options?: { fillGaps?: boolean; roomGuide?: RoomGuide }) {
-    if (!room || !base) return;
+    if (!room) return;
+    if (!base && mode !== "freestyle") return;
     setStarting(true);
     setError("");
     try {
       await queryClient.cancelQueries({ queryKey: generationOptions().queryKey });
+      const photoLess = mode === "freestyle" || (refine && !!active && !active.baseId);
       const r = await generationMutation.mutateAsync({
         roomId: room.id,
-        baseId: base.id,
+        baseId: photoLess ? undefined : base?.id,
         notes: getDraft().notes,
         style: getDraft().style,
         assetIds: selected,
         previousDesignId: refine ? active?.id : undefined,
         mode,
         count,
+        orientation,
         measurements,
         people,
         lighting,
         fillGaps: options?.fillGaps,
         roomGuide: options?.roomGuide,
       });
-      watching.current = r.jobId;
-      queryClient.setQueryData(generationOptions().queryKey, {
-        job: {
-          id: r.jobId,
-          owner: "",
-          roomId: room.id,
-          status: "running",
-          error: null,
-          designId: null,
-          createdAt: "",
-          updatedAt: "",
-        },
-      });
-      await queryClient.invalidateQueries({ queryKey: generationOptions().queryKey });
+      await seedWatch(r.jobId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed.");
+    } finally {
+      setStarting(false);
+    }
+  }
+  async function submitEdit(design: Design, instruction: string, mask: Blob): Promise<boolean> {
+    if (!room) return false;
+    setStarting(true);
+    setError("");
+    try {
+      await queryClient.cancelQueries({ queryKey: generationOptions().queryKey });
+      const data = new FormData();
+      data.set("roomId", room.id);
+      data.set("designId", design.id);
+      data.set("prompt", instruction);
+      data.set("mask", mask, "mask.png");
+      const r = await api<{ jobId: string }>(studioUrls.editDesign, { method: "POST", body: data });
+      await seedWatch(r.jobId);
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The edit failed.");
+      return false;
     } finally {
       setStarting(false);
     }
@@ -407,6 +436,8 @@ export function useStudio(roomId: string) {
     setMeasurements,
     count,
     setCount,
+    orientation,
+    setOrientation,
     people,
     setPeople,
     lighting,
@@ -438,6 +469,7 @@ export function useStudio(roomId: string) {
     deleteCurrentRoom,
     deleteAsset,
     generate,
+    submitEdit,
     drop,
   };
 }
