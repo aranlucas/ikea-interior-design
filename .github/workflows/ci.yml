@@ -15,6 +15,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Validate credential-free local config on Linux
+        run: npm exec -- varlock load --agent
+        env:
+          ROOMFORM_LOCAL: "true"
       - run: npm run check
       - run: npm test
       - run: npm run lint

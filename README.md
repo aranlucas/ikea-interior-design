@@ -24,7 +24,7 @@ On macOS, save the bootstrap token in your login Keychain once:
 npm run secrets:store
 ```
 
-Paste the token at Varlock’s masked prompt. Varlock stores it under service `varlock`, account `roomform:local:BITWARDEN_ACCESS_TOKEN`. The tracked schema contains a native `keychain()` reference. The token stays in Keychain; no shell wrapper, custom helper, or plaintext env file is needed. macOS may ask you to authorize Varlock’s native Keychain access.
+Paste the token at Varlock’s masked prompt. Varlock stores it under service `varlock`, account `roomform:local:BITWARDEN_ACCESS_TOKEN`. The tracked `.env.keychain` contains a native `keychain()` reference and is imported only on macOS outside local mode. The token stays in Keychain; no shell wrapper, custom helper, or plaintext env file is needed. macOS may ask you to authorize Varlock’s native Keychain access.
 
 The [Vite integration](https://varlock.dev/integrations/vite/) loads and validates config for `npm run dev` and `npm run build`. `npm start` uses `varlock run`. Application code imports typed `ENV` from `varlock/env`; `.env.schema` generates the declarations in `src/env.d.ts`. Server configuration is dynamic where it must be resolved at boot, and SSR uses `init-only` to keep resolved secrets out of build artifacts. On Railway or other non-macOS hosts, supply `BITWARDEN_ACCESS_TOKEN` through the platform's secret environment settings; that value takes precedence over the Keychain resolver. See [Varlock’s macOS Keychain guide](https://varlock.dev/plugins/macos-keychain/) for storage and access management.
 
