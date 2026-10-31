@@ -1,3 +1,4 @@
+import { ENV } from "varlock/env";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -9,7 +10,7 @@ import type { Asset } from "./types";
 import type { PhotoMatches, ReconstructedScene } from "./reconstruction";
 
 const execute = promisify(execFile);
-const binary = () => process.env.COLMAP_BIN || "colmap";
+const binary = () => ENV.COLMAP_BIN || "colmap";
 let engineProbe: { until: number; value: Promise<boolean> } | undefined;
 export async function reconstructionEngineAvailable() {
   if (engineProbe && engineProbe.until > Date.now()) return engineProbe.value;

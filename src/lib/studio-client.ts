@@ -5,6 +5,7 @@ export type Session = {
   local: boolean;
   authConfigured: boolean;
   generationConfigured: boolean;
+  imageModel: string;
 };
 export const studioUrls = {
   session: "/api/session",

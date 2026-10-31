@@ -34,12 +34,17 @@ export function pngDimensions(bytes: Uint8Array) {
   const height = view.getUint32(20);
   return width && height ? { width, height } : undefined;
 }
-export function outputSize(bytes: Uint8Array): "1024x1536" | "1024x1024" | "1536x1024" {
+export function outputSize(bytes: Uint8Array): `${number}x${number}` {
   const dimensions = jpegDimensions(bytes) ?? pngDimensions(bytes);
-  if (!dimensions) return "1536x1024";
-  const ratio = dimensions.width / dimensions.height;
-  return ratio < 0.9 ? "1024x1536" : ratio <= 1.1 ? "1024x1024" : "1536x1024";
+  if (!dimensions) return "3840x2160";
+  const ratio = Math.max(1 / 3, Math.min(3, dimensions.width / dimensions.height));
+  const height = Math.min(3840, 3840 / ratio, Math.sqrt(8_294_400 / ratio));
+  // Round down to meet the API's edge, pixel-count, and multiple-of-16 limits.
+  const width = Math.floor((height * ratio) / 16) * 16;
+  const roundedHeight = Math.floor(height / 16) * 16;
+  return `${width}x${roundedHeight}`;
 }
+
 export function orientationSize(
   orientation: "landscape" | "portrait" | "square",
 ): "1024x1536" | "1024x1024" | "1536x1024" {

@@ -160,6 +160,7 @@ it("server-renders a room deep link with a room-specific cache and returns 404 f
       local: false,
       authConfigured: true,
       generationConfigured: false,
+      imageModel: "gpt-image-2.5-sunburst",
     },
     rooms: [full],
   });

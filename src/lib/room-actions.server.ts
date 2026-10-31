@@ -23,6 +23,7 @@ export async function updateRoom(owner: string, value: unknown) {
     else {
       room.notes = input.notes;
       room.style = input.style;
+      if (input.imageSettings) room.imageSettings = input.imageSettings;
     }
     return room;
   });

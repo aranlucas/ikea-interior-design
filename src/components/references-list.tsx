@@ -28,6 +28,7 @@ export function ReferencesList({ state }: { state: StudioState }) {
                   className="ref-toggle"
                   aria-pressed={on}
                   aria-label={`${on ? "Exclude" : "Include"} ${a.name}`}
+                  disabled={locked || (!on && selected.length >= 10)}
                   onClick={() =>
                     setSelected((p) => (on ? p.filter((x) => x !== a.id) : [...p, a.id]))
                   }
@@ -77,6 +78,9 @@ export function ReferencesList({ state }: { state: StudioState }) {
         <button className="ref-empty" disabled={locked} onClick={() => setModal("reference")}>
           Add furniture or inspiration by link or image
         </button>
+      )}
+      {refs.length > 0 && (
+        <p className="hint">Select up to 10 references to include in this design.</p>
       )}
     </div>
   );
