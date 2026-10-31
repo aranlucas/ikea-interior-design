@@ -87,7 +87,7 @@ export function useStudio() {
       room?.assets
         .filter((a) => a.kind !== "room")
         .map((a) => a.id)
-        .slice(0, 10) || [],
+        .slice(-10) || [],
     );
     setDesignId("");
     setView("photo");
@@ -162,7 +162,7 @@ export function useStudio() {
         const r = await api<Room>("/api/rooms", { method: "PATCH", body: data });
         await update(r);
         if (kind !== "room")
-          setSelected((p) => [...p, r.assets[r.assets.length - 1].id].slice(0, 10));
+          setSelected((p) => [...p, r.assets[r.assets.length - 1].id].slice(-10));
         else {
           setBaseId((p) => p || r.assets.find((a) => a.kind === "room")?.id || "");
           if (id === currentRoom.current) setView("photo");
@@ -197,7 +197,7 @@ export function useStudio() {
         }),
       );
       await update(r);
-      setSelected((p) => [...p, r.assets[r.assets.length - 1].id].slice(0, 10));
+      setSelected((p) => [...p, r.assets[r.assets.length - 1].id].slice(-10));
       setModal(null);
     });
   }
