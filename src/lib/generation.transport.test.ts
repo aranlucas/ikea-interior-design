@@ -60,4 +60,7 @@ it("sends Max quality and 4K PNG through the installed SDK's actual image edit t
   expect(sent?.get("output_format")).toBe("png");
   expect(sent?.getAll("image")).toHaveLength(1);
   expect((await storage.rooms(owner))[0].designs[0].generation?.outputTokens).toBe(13000);
+  expect(await storage.load((await storage.rooms(owner))[0].designs[0].key)).toEqual(
+    new Uint8Array(Buffer.from(png, "base64")),
+  );
 });

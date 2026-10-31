@@ -184,7 +184,10 @@ export async function startGeneration(owner: string, raw: z.input<typeof designI
     });
     try {
       for (const [index, design] of designs.entries()) {
-        await save(design.key, produced[index].uint8Array, "image/png");
+        // The SDK's uint8Array getter decodes through a JS string iterator, whose
+        // transient allocations can exceed our memory limit for a single 4K PNG.
+        // Decode natively without caching another full-size image on the result.
+        await save(design.key, Buffer.from(produced[index].base64, "base64"), "image/png");
         if (design.guide && guide) {
           await save(design.guide.key, guide.image, "image/jpeg");
           await save(design.guide.layoutKey, guide.snapshot, "application/json");
@@ -257,7 +260,7 @@ export async function startEditGeneration(
     const data = (await response.json()) as { data?: { b64_json?: string }[] };
     const b64 = data.data?.[0]?.b64_json;
     if (!b64) throw new Error("The image edit returned no image.");
-    const bytes = Uint8Array.from(Buffer.from(b64, "base64"));
+    const bytes = Buffer.from(b64, "base64");
     const design = {
       id: crypto.randomUUID(),
       key: `${ownerPrefix(u.sub)}${room.id}/${crypto.randomUUID()}.png`,

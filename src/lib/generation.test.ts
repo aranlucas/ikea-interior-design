@@ -4,6 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 vi.mock("ai", () => ({ generateImage: vi.fn() }));
 import { generateImage } from "ai";
+function generatedImage(bytes: number[]) {
+  return {
+    base64: Buffer.from(bytes).toString("base64"),
+    get uint8Array(): Uint8Array {
+      throw new Error("Do not use the SDK's allocation-heavy image decoder.");
+    },
+  };
+}
 const directory = mkdtempSync(join(tmpdir(), "roomform-jobs-"));
 beforeAll(() => {
   process.env.DATA_DIR = directory;
@@ -57,10 +65,11 @@ it("persists a paid result after POST returns, scopes status, and releases the l
     providerOptions: { openai: { quality: "max", outputFormat: "png" } },
     maxRetries: 0,
   });
-  complete({ image: { uint8Array: new Uint8Array([1, 2]) }, usage: { outputTokens: 13000 } });
+  complete({ image: generatedImage([1, 2]), usage: { outputTokens: 13000 } });
   await vi.waitFor(() => expect(s.getJob(owner, jobId)?.status).toBe("succeeded"));
   const job = s.getJob(owner, jobId)!;
   expect((await s.rooms(owner))[0].designs[0].id).toBe(job.designId);
+  expect(await s.load((await s.rooms(owner))[0].designs[0].key)).toEqual(new Uint8Array([1, 2]));
   expect((await s.rooms(owner))[0].notes).toBe("Edited while generating");
   expect((await s.rooms(owner))[0].designs[0].generation).toMatchObject({
     model: "gpt-image-2.5-sunburst",
@@ -119,7 +128,7 @@ it("generates freestyle designs without a base photo", async () => {
     },
   ]);
   vi.mocked(generateImage).mockResolvedValueOnce({
-    image: { uint8Array: new Uint8Array([1, 2]) },
+    image: generatedImage([1, 2]),
   } as never);
   const { jobId } = await startGeneration(owner, {
     roomId,
@@ -188,6 +197,7 @@ it("edits a design with a brush mask through the OpenAI edits endpoint", async (
     expect(room.designs[0].mode).toBe("edit");
     expect(room.designs[0].prompt).toBe("Replace the rug");
     expect(room.designs[0].baseId).toBe("");
+    expect(await s.load(room.designs[0].key)).toEqual(new Uint8Array([9, 9]));
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const form = init.body as FormData;
     const prompt = String(form.get("prompt"));
@@ -254,7 +264,7 @@ it("ignores the base photo in freestyle mode", async () => {
     },
   ]);
   vi.mocked(generateImage).mockResolvedValueOnce({
-    image: { uint8Array: new Uint8Array([1, 2]) },
+    image: generatedImage([1, 2]),
   } as never);
   const { jobId } = await startGeneration(owner, {
     roomId,
@@ -296,7 +306,7 @@ it("keeps all variations without duplicating request-level token charges on each
     },
   ]);
   vi.mocked(generateImage).mockResolvedValueOnce({
-    images: Array.from({ length: 4 }, (_, i) => ({ uint8Array: new Uint8Array([i]) })),
+    images: Array.from({ length: 4 }, (_, i) => generatedImage([i])),
     usage: { outputTokens: 52000 },
   } as never);
   const imageSettings = { quality: "high", size: "photo" } as const;
@@ -320,10 +330,10 @@ it("keeps all variations without duplicating request-level token charges on each
     size: "1024x1024",
     providerOptions: { openai: { quality: "high" } },
   });
-  for (const design of room.designs) {
+  for (const [index, design] of room.designs.entries()) {
     expect(design.generation).toMatchObject({ quality: "high", size: "1024x1024" });
     expect(design.generation?.outputTokens).toBeUndefined();
     expect(design.generation?.outputCostUsd).toBeUndefined();
-    expect(await s.load(design.key)).toBeDefined();
+    expect(await s.load(design.key)).toEqual(new Uint8Array([index]));
   }
 });
