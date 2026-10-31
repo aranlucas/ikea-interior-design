@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "steps": {
+    "install": {
+      "variables": { "NPM_CONFIG_PRODUCTION": "", "NPM_CONFIG_INCLUDE": "dev" }
+    },
+    "build": {
+      "variables": { "NPM_CONFIG_PRODUCTION": "" }
+    }
+  },
+  "deploy": {
+    "variables": { "NPM_CONFIG_PRODUCTION": "", "NPM_CONFIG_OMIT": "dev" }
+  }
+}
