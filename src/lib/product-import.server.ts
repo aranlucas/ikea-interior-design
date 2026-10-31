@@ -4,7 +4,17 @@ import { extractProductDimensions, shopifySize } from "./product-dimensions";
 import { fetchPublic, publicUrl } from "./public-fetch.server";
 export function extractPageReference(html: string, pageUrl: URL) {
   const $ = load(html);
+  const amazon = /(^|\.)amazon\.(com|ca|co\.uk|de|fr|it|es|co\.jp|com\.au|in)$/.test(
+    pageUrl.hostname,
+  );
+  if (
+    amazon &&
+    ($('#captchacharacters, form[action*="validateCaptcha"]').length ||
+      /robot check|amazon captcha/i.test($("title").text()))
+  )
+    throw new Error("Amazon blocked this product request. Upload the product photo instead.");
   const title = (
+    (amazon && $("#productTitle").first().text().trim()) ||
     $('meta[property="og:title"]').attr("content") ||
     $('meta[name="twitter:title"]').attr("content") ||
     $("h1").first().text() ||
@@ -12,7 +22,36 @@ export function extractPageReference(html: string, pageUrl: URL) {
   )
     .trim()
     .slice(0, 120);
-  let image =
+  let image: string | undefined;
+  if (amazon) {
+    // Use the displayed product's image, rather than a recommendation or thumbnail.
+    const primary = $("#landingImage, #imgBlkFront, #ebooksImgBlkFront").first();
+    image = primary.attr("data-old-hires")?.trim();
+    if (!image) {
+      try {
+        const dynamic: unknown = JSON.parse(primary.attr("data-a-dynamic-image") || "{}");
+        if (dynamic && typeof dynamic === "object" && !Array.isArray(dynamic)) {
+          let largest = 0;
+          for (const [url, size] of Object.entries(dynamic)) {
+            if (
+              Array.isArray(size) &&
+              size.length === 2 &&
+              size.every((n) => typeof n === "number" && Number.isFinite(n) && n > 0) &&
+              size[0] * size[1] > largest
+            ) {
+              largest = size[0] * size[1];
+              image = url;
+            }
+          }
+        }
+      } catch {
+        /* The displayed image still works when the resolution map is malformed. */
+      }
+    }
+    image ||= primary.attr("data-src") || primary.attr("src");
+    if (image && !/^https?:|^\/\//i.test(image)) image = undefined;
+  }
+  image ||=
     $('meta[property="og:image:secure_url"]').attr("content") ||
     $('meta[property="og:image"]').attr("content") ||
     $('meta[name="twitter:image"]').attr("content") ||
