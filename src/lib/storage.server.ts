@@ -1,3 +1,4 @@
+import { ENV } from "varlock/env";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
@@ -8,7 +9,7 @@ export const ownerPrefix = (sub: string) =>
 let database: DatabaseSync | undefined;
 function db() {
   if (database) return database;
-  const directory = process.env.DATA_DIR || ".data";
+  const directory = ENV.DATA_DIR || ".data";
   mkdirSync(directory, { recursive: true });
   database = new DatabaseSync(resolve(directory, "roomform.sqlite"));
   database.exec(

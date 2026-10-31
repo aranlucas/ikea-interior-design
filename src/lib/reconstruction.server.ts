@@ -1,3 +1,4 @@
+import { ENV } from "varlock/env";
 import { reconstructionInput } from "./reconstruction";
 import { reconstructionEngineAvailable, runColmap } from "./colmap-runner.server";
 import { runAiRoomLayout } from "./ai-room-layout.server";
@@ -50,7 +51,7 @@ export async function startReconstruction(owner: string, value: unknown) {
     throw new Response("A 3D room is already building. Wait for it to finish or cancel it first.", {
       status: 409,
     });
-  if (input.mode === "ai-layout" && !process.env.OPENAI_API_KEY)
+  if (input.mode === "ai-layout" && !ENV.OPENAI_API_KEY)
     throw new Response("AI-assisted room builds aren’t configured on this server.", {
       status: 503,
     });

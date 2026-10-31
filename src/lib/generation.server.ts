@@ -1,3 +1,4 @@
+import { ENV } from "varlock/env";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateImage } from "ai";
 import {
@@ -20,8 +21,8 @@ import type { z } from "zod";
 export async function startGeneration(owner: string, input: z.infer<typeof designInput>) {
   const u = { sub: owner };
   const settings = input.imageSettings ?? defaultImageSettings;
-  const model = process.env.OPENAI_IMAGE_MODEL || defaultImageModel;
-  if (!process.env.OPENAI_API_KEY)
+  const model = ENV.OPENAI_IMAGE_MODEL || defaultImageModel;
+  if (!ENV.OPENAI_API_KEY)
     throw new Error("Add OPENAI_API_KEY to the server environment to generate a design.");
   const all = await rooms(u.sub);
   const room = all.find((r) => r.id === input.roomId);
@@ -80,7 +81,7 @@ export async function startGeneration(owner: string, input: z.infer<typeof desig
   void settleGeneration(u.sub, job.id, async () => {
     if (!(await rooms(u.sub)).some((r) => r.id === room.id))
       throw new Error("Room was removed before generation started.");
-    const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const provider = createOpenAI({ apiKey: ENV.OPENAI_API_KEY });
     const size = settings.size === "photo" ? outputSize(images[0]) : settings.size;
     const signal = AbortSignal.timeout(240_000);
     const result = await retryImageRequest(

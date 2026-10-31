@@ -1,14 +1,13 @@
+import { ENV } from "varlock/env";
 import * as oidc from "openid-client";
 import { EncryptJWT, jwtDecrypt } from "jose";
 import { createHash, randomBytes } from "node:crypto";
 import type { User } from "./types";
-const issuer = () => process.env.AUTH_ISSUER || "https://auth.aranlucas.workers.dev/api/auth";
+const issuer = () => ENV.AUTH_ISSUER || "https://auth.aranlucas.workers.dev/api/auth";
 export const devBypass = () =>
-  process.env.DEV_AUTH_BYPASS === "true" &&
-  process.env.NODE_ENV !== "production" &&
-  !process.env.VERCEL;
+  ENV.DEV_AUTH_BYPASS === true && ENV.NODE_ENV !== "production" && !ENV.VERCEL;
 function key() {
-  const secret = process.env.SESSION_SECRET;
+  const secret = ENV.SESSION_SECRET;
   if (!secret || secret.length < 32)
     throw new Error("Set SESSION_SECRET to at least 32 random characters.");
   return createHash("sha256").update(secret).digest();
@@ -22,8 +21,8 @@ export function cookie(req: Request, name: string) {
     ?.slice(name.length + 1);
 }
 export const appUrl = () => {
-  if (!process.env.APP_URL) throw new Error("APP_URL is not configured.");
-  return new URL(process.env.APP_URL).origin;
+  if (!ENV.APP_URL) throw new Error("APP_URL is not configured.");
+  return new URL(ENV.APP_URL).origin;
 };
 export function setCookie(name: string, value: string, age: number) {
   return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${appUrl().startsWith("https:") ? "; Secure" : ""}`;
@@ -64,15 +63,13 @@ export function sameOrigin(req: Request) {
 }
 let discovery: Promise<oidc.Configuration> | undefined;
 function config() {
-  if (!process.env.AUTH_CLIENT_ID)
+  if (!ENV.AUTH_CLIENT_ID)
     throw new Error("Register this app with your Auth service and set AUTH_CLIENT_ID.");
   return (discovery ??= oidc.discovery(
     new URL(`${issuer()}/.well-known/openid-configuration`),
-    process.env.AUTH_CLIENT_ID,
-    process.env.AUTH_CLIENT_SECRET || undefined,
-    process.env.AUTH_CLIENT_SECRET
-      ? oidc.ClientSecretBasic(process.env.AUTH_CLIENT_SECRET)
-      : oidc.None(),
+    ENV.AUTH_CLIENT_ID,
+    ENV.AUTH_CLIENT_SECRET || undefined,
+    ENV.AUTH_CLIENT_SECRET ? oidc.ClientSecretBasic(ENV.AUTH_CLIENT_SECRET) : oidc.None(),
   ));
 }
 export async function login() {
