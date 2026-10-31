@@ -89,3 +89,179 @@ it("recovers interrupted jobs and leases when a new server opens the database", 
   expect(restarted.claimGeneration("restart")).toBe(true);
   expect(restarted.getJob("completed", done.id)?.status).toBe("succeeded");
 });
+it("generates freestyle designs without a base photo", async () => {
+  const s = await import("./storage.server");
+  const { startGeneration } = await import("./generation.server");
+  const owner = "freestyle";
+  const roomId = crypto.randomUUID();
+  await s.saveRooms(owner, [
+    {
+      id: roomId,
+      name: "Garden",
+      type: "Garden",
+      notes: "",
+      style: "Tropical",
+      assets: [],
+      designs: [],
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  vi.mocked(generateImage).mockResolvedValueOnce({
+    image: { uint8Array: new Uint8Array([1, 2]) },
+  } as never);
+  const { jobId } = await startGeneration(owner, {
+    roomId,
+    notes: "",
+    style: "Tropical",
+    assetIds: [],
+    mode: "freestyle",
+    orientation: "portrait",
+  });
+  await vi.waitFor(() => expect(s.getJob(owner, jobId)?.status).toBe("succeeded"));
+  const design = (await s.rooms(owner))[0].designs[0];
+  expect(design.baseId).toBe("");
+  expect(design.mode).toBe("freestyle");
+  const call = vi.mocked(generateImage).mock.calls.at(-1)![0] as {
+    size: string;
+    prompt: { images: unknown[] };
+  };
+  expect(call.size).toBe("1024x1536");
+  expect(call.prompt.images).toHaveLength(0);
+  expect(s.claimGeneration(owner)).toBe(true);
+  s.releaseGeneration(owner);
+});
+function png(width: number, height: number) {
+  const bytes = new Uint8Array(24);
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10], 0);
+  bytes.set([0, 0, 0, 13, 73, 72, 68, 82], 8);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return bytes;
+}
+it("edits a design with a brush mask through the OpenAI edits endpoint", async () => {
+  const s = await import("./storage.server");
+  const { startEditGeneration } = await import("./generation.server");
+  const owner = "edit";
+  const roomId = crypto.randomUUID();
+  const designId = crypto.randomUUID();
+  const key = s.ownerPrefix(owner) + roomId + "/" + designId + ".png";
+  await s.save(key, png(1024, 1536), "image/png");
+  await s.saveRooms(owner, [
+    {
+      id: roomId,
+      name: "Room",
+      type: "Living",
+      notes: "",
+      style: "",
+      assets: [],
+      designs: [{ id: designId, key, prompt: "", baseId: "", createdAt: new Date().toISOString() }],
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  const fetchMock = vi.fn(async () =>
+    Response.json({ data: [{ b64_json: Buffer.from([9, 9]).toString("base64") }] }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    const { jobId } = await startEditGeneration(owner, {
+      roomId,
+      designId,
+      prompt: "Replace the rug",
+      mask: new Uint8Array(png(1024, 1536).buffer),
+    });
+    await vi.waitFor(() => expect(s.getJob(owner, jobId)?.status).toBe("succeeded"));
+    const room = (await s.rooms(owner))[0];
+    expect(room.designs).toHaveLength(2);
+    expect(room.designs[0].mode).toBe("edit");
+    expect(room.designs[0].prompt).toBe("Replace the rug");
+    expect(room.designs[0].baseId).toBe("");
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const form = init.body as FormData;
+    const prompt = String(form.get("prompt"));
+    expect(prompt).toContain("Replace the rug");
+    expect(prompt).toContain("outside the mask");
+    expect(form.get("n")).toBe("1");
+    const image = form.get("image") as File;
+    expect(image.type).toBe("image/png");
+    expect(image.size).toBe(24);
+    expect((form.get("mask") as File).type).toBe("image/png");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+  expect(s.claimGeneration(owner)).toBe(true);
+  s.releaseGeneration(owner);
+});
+it("rejects a brush mask whose dimensions differ from the design", async () => {
+  const s = await import("./storage.server");
+  const { startEditGeneration } = await import("./generation.server");
+  const owner = "edit-mismatch";
+  const roomId = crypto.randomUUID();
+  const designId = crypto.randomUUID();
+  const key = s.ownerPrefix(owner) + roomId + "/" + designId + ".png";
+  await s.save(key, png(1024, 1536), "image/png");
+  await s.saveRooms(owner, [
+    {
+      id: roomId,
+      name: "Room",
+      type: "Living",
+      notes: "",
+      style: "",
+      assets: [],
+      designs: [{ id: designId, key, prompt: "", baseId: "", createdAt: new Date().toISOString() }],
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  await expect(
+    startEditGeneration(owner, {
+      roomId,
+      designId,
+      prompt: "Replace the rug",
+      mask: new Uint8Array(png(100, 100).buffer),
+    }),
+  ).rejects.toThrow("same dimensions");
+});
+it("ignores the base photo in freestyle mode", async () => {
+  const s = await import("./storage.server");
+  const { startGeneration } = await import("./generation.server");
+  const owner = "freestyle-photos";
+  const roomId = crypto.randomUUID();
+  const baseId = crypto.randomUUID();
+  const key = s.ownerPrefix(owner) + roomId + "/base.jpeg";
+  await s.save(key, new Uint8Array([1]), "image/jpeg");
+  await s.saveRooms(owner, [
+    {
+      id: roomId,
+      name: "Room",
+      type: "Living room",
+      notes: "",
+      style: "",
+      assets: [{ id: baseId, key, name: "Base", kind: "room" }],
+      designs: [],
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  vi.mocked(generateImage).mockResolvedValueOnce({
+    image: { uint8Array: new Uint8Array([1, 2]) },
+  } as never);
+  const { jobId } = await startGeneration(owner, {
+    roomId,
+    baseId,
+    notes: "",
+    style: "",
+    assetIds: [],
+    mode: "freestyle",
+    orientation: "portrait",
+  });
+  await vi.waitFor(() => expect(s.getJob(owner, jobId)?.status).toBe("succeeded"));
+  const design = (await s.rooms(owner))[0].designs[0];
+  expect(design.baseId).toBe("");
+  expect(design.mode).toBe("freestyle");
+  const call = vi.mocked(generateImage).mock.calls.at(-1)![0] as {
+    size: string;
+    prompt: { images: unknown[] };
+  };
+  expect(call.size).toBe("1024x1536");
+  expect(call.prompt.images).toHaveLength(0);
+  s.releaseGeneration(owner);
+});

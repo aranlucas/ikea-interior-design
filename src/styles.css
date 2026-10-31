@@ -279,6 +279,22 @@ img {
 .segmented.full button {
   flex: 1;
 }
+.segmented.full.wrap {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.editor-canvas {
+  display: flex;
+  justify-content: center;
+}
+.editor-canvas canvas {
+  max-width: 100%;
+  max-height: 52vh;
+  width: auto;
+  height: auto;
+  border-radius: 10px;
+  background: var(--sunken);
+}
 
 /* Forms */
 .form {

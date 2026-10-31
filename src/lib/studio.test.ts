@@ -2,7 +2,14 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildPrompt, designInput, roomName, roomUpdate } from "./validation";
+import {
+  buildEditPrompt,
+  buildPrompt,
+  designInput,
+  isOutdoor,
+  roomName,
+  roomUpdate,
+} from "./validation";
 import { seal, unseal, user, authorizationRedirect } from "./auth.server";
 const dir = mkdtempSync(join(tmpdir(), "roomform-"));
 beforeAll(() => {
@@ -94,6 +101,64 @@ describe("private studio", () => {
     expect(designInput.parse({ ...base, count: 4 }).count).toBe(4);
     expect(designInput.parse({ ...base }).mode).toBe("redesign");
     expect(() => designInput.parse({ ...base, mode: "fly" })).toThrow();
+  });
+
+  it("supports freestyle, paint, and photo-less refinement directives", () => {
+    const base = {
+      roomId: crypto.randomUUID(),
+      notes: "",
+      style: "Japandi",
+      assetIds: [],
+    };
+    const freestyle = buildPrompt(
+      "Living room",
+      designInput.parse({ ...base, mode: "freestyle" }),
+      [],
+      0,
+    );
+    expect(freestyle).toContain("compose the space from scratch");
+    expect(freestyle).not.toContain("Image 1 is the exact camera view");
+    expect(
+      buildPrompt("Living room", designInput.parse({ ...base, mode: "paint" }), [], 1),
+    ).toContain("Repaint and refinish only");
+    const refine = buildPrompt(
+      "Living room",
+      designInput.parse({ ...base, previousDesignId: crypto.randomUUID() }),
+      [],
+      0,
+    );
+    expect(refine).toContain("The final image is the previous design");
+    expect(refine).not.toContain("compose the space from scratch");
+    const parsed = designInput.parse({ ...base, count: 8, orientation: "portrait" });
+    expect(parsed.count).toBe(8);
+    expect(parsed.orientation).toBe("portrait");
+    expect(parsed.baseId).toBeUndefined();
+    expect(designInput.parse({ ...base }).orientation).toBe("landscape");
+    expect(() => designInput.parse({ ...base, count: 3 })).toThrow();
+    const edit = buildEditPrompt("Replace the rug");
+    expect(edit).toContain("Replace the rug");
+    expect(edit).toContain("outside the mask");
+  });
+
+  it("adapts prompts for outdoor room types", () => {
+    const base = {
+      roomId: crypto.randomUUID(),
+      baseId: crypto.randomUUID(),
+      notes: "",
+      style: "Coastal",
+      assetIds: [],
+    };
+    const garden = buildPrompt("Garden", designInput.parse({ ...base }), [], 1);
+    expect(garden).toContain("landscape designer");
+    expect(garden).toContain("boundary walls, fencing, paving");
+    expect(garden).toContain("polished photograph of the space");
+    expect(garden).not.toContain("polished interior photograph");
+    const living = buildPrompt("Living room", designInput.parse({ ...base }), [], 1);
+    expect(living).toContain("interior designer");
+    expect(isOutdoor("Garden")).toBe(true);
+    expect(isOutdoor("House exterior")).toBe(true);
+    expect(isOutdoor("Outdoor")).toBe(true);
+    expect(isOutdoor("Living room")).toBe(false);
   });
 
   it("anchors scale with room measurements, size guidance and the layout plan", () => {

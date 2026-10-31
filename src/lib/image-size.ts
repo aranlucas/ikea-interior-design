@@ -24,9 +24,28 @@ export function jpegDimensions(bytes: Uint8Array) {
     offset += length;
   }
 }
+/** Read PNG IHDR dimensions without decoding pixels. Malformed headers are ignored. */
+export function pngDimensions(bytes: Uint8Array) {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (bytes.length < 24 || !signature.every((b, i) => bytes[i] === b)) return;
+  if (bytes[12] !== 0x49 || bytes[13] !== 0x48 || bytes[14] !== 0x44 || bytes[15] !== 0x52) return;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
+  return width && height ? { width, height } : undefined;
+}
 export function outputSize(bytes: Uint8Array): "1024x1536" | "1024x1024" | "1536x1024" {
-  const dimensions = jpegDimensions(bytes);
+  const dimensions = jpegDimensions(bytes) ?? pngDimensions(bytes);
   if (!dimensions) return "1536x1024";
   const ratio = dimensions.width / dimensions.height;
   return ratio < 0.9 ? "1024x1536" : ratio <= 1.1 ? "1024x1024" : "1536x1024";
+}
+export function orientationSize(
+  orientation: "landscape" | "portrait" | "square",
+): "1024x1536" | "1024x1024" | "1536x1024" {
+  return orientation === "portrait"
+    ? "1024x1536"
+    : orientation === "square"
+      ? "1024x1024"
+      : "1536x1024";
 }
